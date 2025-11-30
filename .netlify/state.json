@@ -1,0 +1,19 @@
+{
+	"geolocation": {
+		"data": {
+			"city": "San Bernardo",
+			"country": {
+				"code": "CL",
+				"name": "Chile"
+			},
+			"subdivision": {
+				"code": "RM",
+				"name": "Santiago Metropolitan"
+			},
+			"timezone": "America/Santiago",
+			"latitude": -33.5901,
+			"longitude": -70.6956
+		},
+		"timestamp": 1764395537034
+	}
+}

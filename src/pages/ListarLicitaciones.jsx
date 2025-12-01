@@ -58,6 +58,9 @@ export default function ListarLicitaciones() {
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 tracking-wide uppercase">
                 Lista Precios
               </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 tracking-wide uppercase">
+                Creado por
+              </th>
               <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 tracking-wide uppercase">
                 Acción
               </th>
@@ -67,7 +70,7 @@ export default function ListarLicitaciones() {
           <tbody className="divide-y divide-gray-200/60 bg-white">
             {data.length === 0 && (
               <tr>
-                <td colSpan="5" className="px-6 py-16 text-center">
+                <td colSpan="6" className="px-6 py-16 text-center">
                   <div className="text-gray-500 text-sm">
                     No hay licitaciones creadas todavía.
                   </div>
@@ -91,9 +94,14 @@ export default function ListarLicitaciones() {
                 </td>
 
                 <td className="px-6 py-4">
-                  <span className={badge(l.listado_precios)}>
-                    Lista {l.listado_precios}
+                  <span className={badge(l.lista_precios)}>
+                    Lista {l.lista_precios}
                   </span>
+                </td>
+
+                {/* NUEVA COLUMNA: CREADO POR */}
+                <td className="px-6 py-4 text-sm text-gray-700">
+                  {l.creado_por}
                 </td>
 
                 <td className="px-6 py-4 text-right">

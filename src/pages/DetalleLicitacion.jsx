@@ -8,6 +8,7 @@ export default function DetalleLicitacion() {
   const [items, setItems] = useState([]);
 
   async function loadData() {
+    // Cargar datos de la licitación
     const { data: licitacion } = await supabase
       .from("licitaciones")
       .select("*")
@@ -16,8 +17,9 @@ export default function DetalleLicitacion() {
 
     setLici(licitacion);
 
+    // Cargar datos de los items
     const { data: its } = await supabase
-      .from("items")
+      .from("items_licitacion")
       .select("*")
       .eq("licitacion_id", id)
       .order("id");
@@ -48,7 +50,7 @@ export default function DetalleLicitacion() {
   };
 
   const totalGeneral = items.reduce(
-    (acc, it) => acc + Number(it.total),
+    (acc, it) => acc + Number(it.total || (it.cantidad * it.valor_unitario)),
     0
   );
 
@@ -76,8 +78,9 @@ export default function DetalleLicitacion() {
 
       {/* Card de resumen */}
       <div className="bg-white border border-gray-500/10 rounded-xl shadow-sm p-6 mb-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
 
+          {/* Nombre */}
           <div>
             <p className="text-sm text-gray-600">Nombre</p>
             <p className="text-lg font-medium text-gray-900 mt-1">
@@ -85,6 +88,7 @@ export default function DetalleLicitacion() {
             </p>
           </div>
 
+          {/* Fecha */}
           <div>
             <p className="text-sm text-gray-600">Fecha</p>
             <p className="text-lg font-medium text-gray-900 mt-1">
@@ -92,12 +96,22 @@ export default function DetalleLicitacion() {
             </p>
           </div>
 
+          {/* Lista precios */}
           <div>
             <p className="text-sm text-gray-600 mb-1">Lista de Precios</p>
-            <span className={badge(lici.listado_precios)}>
-              Lista {lici.listado_precios}
+            <span className={badge(lici.lista_precios)}>
+              Lista {lici.lista_precios}
             </span>
           </div>
+
+          {/* Creado por (NUEVO) */}
+          <div>
+            <p className="text-sm text-gray-600">Creado por</p>
+            <p className="text-lg font-medium text-gray-900 mt-1">
+              {lici.creado_por}
+            </p>
+          </div>
+
         </div>
       </div>
 
@@ -126,10 +140,7 @@ export default function DetalleLicitacion() {
 
           <tbody className="bg-white divide-y divide-gray-200/60">
             {items.map((it) => (
-              <tr
-                key={it.id}
-                className="hover:bg-gray-50 transition-colors"
-              >
+              <tr key={it.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 text-sm text-gray-900">
                   {it.producto}
                 </td>
@@ -143,11 +154,11 @@ export default function DetalleLicitacion() {
                 </td>
 
                 <td className="px-6 py-4 text-right text-sm text-gray-700">
-                  ${it.precio_unitario}
+                  ${it.valor_unitario}
                 </td>
 
                 <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                  ${it.total}
+                  ${it.total || it.cantidad * it.valor_unitario}
                 </td>
               </tr>
             ))}
@@ -156,7 +167,10 @@ export default function DetalleLicitacion() {
           {/* Total general */}
           <tfoot>
             <tr className="bg-gray-50">
-              <td colSpan="4" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+              <td
+                colSpan="4"
+                className="px-6 py-4 text-right text-sm font-semibold text-gray-900"
+              >
                 Total General:
               </td>
               <td className="px-6 py-4 text-right text-lg font-bold text-gray-900">

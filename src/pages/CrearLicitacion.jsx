@@ -17,68 +17,81 @@ export default function CrearLicitacion() {
   }
 
   function agregarItem() {
-    setItems([...items, { producto: "", unidad: "", cantidad: 0, precio: 0 }]);
+    setItems([
+      ...items,
+      { producto: "", unidad: "", cantidad: 0, precio: 0 },
+    ]);
   }
 
+  // ============================================================
+  // 🟦 GUARDAR LICITACIÓN COMPLETA (cabecera + ítems)
+  // ============================================================
+  async function guardarLicitacion() {
+    // 👉 Obtener usuario autenticado
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-
-
-async function guardarLicitacion() {
-  // 1) Insertamos la cabecera
-  const { data: nuevaLicitacion, error: errorCabecera } = await supabase
-    .from("licitaciones")
-    .insert([
-      {
-        nombre,
-        fecha,
-        lista_precios: Number(listado),
-      },
-    ])
-    .select("id")
-    .single();
-
-  if (errorCabecera) {
-    console.error("ERROR CABECERA:", errorCabecera);
-    alert("Error guardando la licitación");
-    return;
-  }
-
-  const licitacionId = nuevaLicitacion.id;
-
-  // 2) Insertamos ítems
-  for (const it of items) {
-    const { error: errorItem } = await supabase
-      .from("items_licitacion")
-      .insert([
-        {
-          licitacion_id: licitacionId,
-      producto: it.producto || "",
-      unidad: it.unidad || "",
-      cantidad: Number(it.cantidad || 0),
-      valor_unitario: Number(it.precio || 0)
-      // ❌ NO enviar total, se calcula solo:
-      // total: Number(it.cantidad) * Number(it.precio)
-        }
-      ]);
-
-    if (errorItem) {
-      console.error("ERROR ITEM:", errorItem);
-      alert("Error guardando ítems");
+    if (userError) {
+      console.error("Error obteniendo usuario:", userError);
+      alert("No se pudo obtener el usuario autenticado.");
       return;
     }
+
+    const emailUsuario = user?.email || "desconocido";
+
+    // 👉 1) Insertar la CABECERA
+    const { data: nuevaLicitacion, error: errorCabecera } = await supabase
+      .from("licitaciones")
+      .insert([
+        {
+          nombre,
+          fecha,
+          lista_precios: Number(listado),
+          creado_por: emailUsuario, // 👈 Se guarda el correo
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (errorCabecera) {
+      console.error("ERROR CABECERA:", errorCabecera);
+      alert("Error guardando la licitación");
+      return;
+    }
+
+    const licitacionId = nuevaLicitacion.id;
+
+    // 👉 2) Insertar ÍTEMS
+    for (const it of items) {
+      const { error: errorItem } = await supabase
+        .from("items_licitacion")
+        .insert([
+          {
+            licitacion_id: licitacionId,
+            producto: it.producto || "",
+            unidad: it.unidad || "",
+            cantidad: Number(it.cantidad || 0),
+            valor_unitario: Number(it.precio || 0),
+          },
+        ]);
+
+      if (errorItem) {
+        console.error("ERROR ITEM:", errorItem);
+        alert("Error guardando ítems");
+        return;
+      }
+    }
+
+    alert("Licitación creada con éxito.");
+
+    // 👉 Reset del formulario
+    setNombre("");
+    setFecha("");
+    setListado("1");
+    setItems([{ producto: "", unidad: "", cantidad: 0, precio: 0 }]);
   }
-
-  alert("Licitación creada con éxito");
-
-  // Reset de formulario
-  setNombre("");
-  setFecha("");
-  setListado("1");
-  setItems([{ producto: "", unidad: "", cantidad: 0, precio: 0 }]);
-}
-
-
-
 
   return (
     <div className="mx-auto max-w-5xl p-8">
@@ -145,6 +158,7 @@ async function guardarLicitacion() {
             key={index}
             className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-white border border-gray-400/20 rounded-lg p-4 shadow-sm"
           >
+            {/* Producto */}
             <input
               className="rounded-md border border-gray-400/30 px-3 py-2 bg-gray-50"
               placeholder="Producto"
@@ -154,6 +168,7 @@ async function guardarLicitacion() {
               }
             />
 
+            {/* Unidad */}
             <input
               className="rounded-md border border-gray-400/30 px-3 py-2 bg-gray-50"
               placeholder="Unidad"
@@ -163,6 +178,7 @@ async function guardarLicitacion() {
               }
             />
 
+            {/* Cantidad */}
             <div>
               <label className="block text-xs text-gray-600 mb-1">
                 Cantidad
@@ -177,6 +193,7 @@ async function guardarLicitacion() {
               />
             </div>
 
+            {/* Precio */}
             <div>
               <label className="block text-xs text-gray-600 mb-1">
                 Precio Unitario
@@ -191,6 +208,7 @@ async function guardarLicitacion() {
               />
             </div>
 
+            {/* Total calculado */}
             <div className="flex items-end font-semibold text-gray-900">
               ${it.cantidad * it.precio}
             </div>

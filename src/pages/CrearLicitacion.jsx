@@ -23,7 +23,7 @@ export default function CrearLicitacion() {
     },
   ]);
 
-  // Cargar catálogo
+  // Cargar productos y precios
   useEffect(() => {
     async function cargarCatalogo() {
       const { data: productosDB } = await supabase
@@ -41,7 +41,7 @@ export default function CrearLicitacion() {
     cargarCatalogo();
   }, []);
 
-  // Actualiza precios cuando se cambia la lista
+  // Actualizar precios según la lista seleccionada
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((item) => {
       if (!item.sku) return item;
@@ -64,18 +64,27 @@ export default function CrearLicitacion() {
     setItems(copia);
   }
 
-  // Actualiza campos del ítem
+  // Actualizar ítems con matchcode SKU <-> Producto
   function actualizarItem(index, campo, valor) {
     const copia = [...items];
     let item = { ...copia[index] };
 
     item[campo] = valor;
 
-    // Si cambia SKU, autopoblar producto y unidad
-    if (campo === "sku") {
-      const prod = productos.find((p) => p.sku === valor);
+    // -------- MATCHCODE SKU <-> PRODUCTO --------
+    if (campo === "sku" || campo === "producto") {
+      let prod = null;
+
+      if (campo === "sku") {
+        prod = productos.find((p) => p.sku === valor);
+      }
+
+      if (campo === "producto") {
+        prod = productos.find((p) => p.nombre === valor);
+      }
 
       if (prod) {
+        item.sku = prod.sku;
         item.producto = prod.nombre;
         item.unidad = prod.unidad;
 
@@ -89,9 +98,8 @@ export default function CrearLicitacion() {
       }
     }
 
-    // Recalcular total con IVA
-    item.total =
-      Number(item.cantidad) * Number(item.precio) * 1.19;
+    // Total con IVA
+    item.total = Number(item.cantidad) * Number(item.precio) * 1.19;
 
     copia[index] = item;
     setItems(copia);
@@ -104,7 +112,7 @@ export default function CrearLicitacion() {
     ]);
   }
 
-  // Guardar licitación
+  // Guardar en Supabase
   async function guardarLicitacion() {
     const user = (await supabase.auth.getUser()).data.user;
 
@@ -131,7 +139,6 @@ export default function CrearLicitacion() {
 
     const licitacionId = nuevaLicitacion.id;
 
-    // Insertar ítems
     for (const it of items) {
       const { error: errorItem } = await supabase
         .from("items_licitacion")
@@ -178,7 +185,7 @@ export default function CrearLicitacion() {
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-          {/* Nombre Licitación */}
+          {/* Nombre */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre de Licitación
@@ -203,7 +210,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
-          {/* Lista de Precios */}
+          {/* Lista */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Lista de Precios
@@ -223,7 +230,7 @@ export default function CrearLicitacion() {
             </select>
           </div>
 
-          {/* RUT Entidad */}
+          {/* RUT */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               RUT Entidad
@@ -280,19 +287,28 @@ export default function CrearLicitacion() {
               </select>
             </div>
 
-            {/* Producto */}
+            {/* PRODUCTO */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Producto
               </label>
-              <input
-                className="w-full rounded-md border border-gray-400/30 px-3 py-2 bg-gray-100"
+              <select
+                className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
                 value={it.producto}
-                readOnly
-              />
+                onChange={(e) =>
+                  actualizarItem(index, "producto", e.target.value)
+                }
+              >
+                <option value="">Seleccione producto</option>
+                {productos.map((p) => (
+                  <option key={p.id} value={p.nombre}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Unidad */}
+            {/* UNIDAD */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Unidad
@@ -304,7 +320,7 @@ export default function CrearLicitacion() {
               />
             </div>
 
-            {/* Cantidad */}
+            {/* CANTIDAD */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Cantidad
@@ -319,7 +335,7 @@ export default function CrearLicitacion() {
               />
             </div>
 
-            {/* Precio Unitario */}
+            {/* PRECIO */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Precio Unitario
@@ -332,7 +348,7 @@ export default function CrearLicitacion() {
               />
             </div>
 
-            {/* Total */}
+            {/* TOTAL */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Total (c/ IVA)

@@ -5,6 +5,7 @@ export default function CrearLicitacion() {
   const [nombre, setNombre] = useState("");
   const [fecha, setFecha] = useState("");
   const [listado, setListado] = useState("1");
+  const [estado, setEstado] = useState("En espera");
 
   const [items, setItems] = useState([
     { producto: "", unidad: "", cantidad: 0, precio: 0 },
@@ -24,10 +25,10 @@ export default function CrearLicitacion() {
   }
 
   // ============================================================
-  // 🟦 GUARDAR LICITACIÓN COMPLETA (cabecera + ítems)
+  // GUARDAR LICITACIÓN
   // ============================================================
   async function guardarLicitacion() {
-    // 👉 Obtener usuario autenticado
+    // Obtener usuario actual
     const {
       data: { user },
       error: userError,
@@ -41,7 +42,7 @@ export default function CrearLicitacion() {
 
     const emailUsuario = user?.email || "desconocido";
 
-    // 👉 1) Insertar la CABECERA
+    // 1. Insertar cabecera
     const { data: nuevaLicitacion, error: errorCabecera } = await supabase
       .from("licitaciones")
       .insert([
@@ -49,7 +50,8 @@ export default function CrearLicitacion() {
           nombre,
           fecha,
           lista_precios: Number(listado),
-          creado_por: emailUsuario, // 👈 Se guarda el correo
+          creado_por: emailUsuario,
+          estado: estado, // 👈 nuevo campo
         },
       ])
       .select("id")
@@ -63,7 +65,7 @@ export default function CrearLicitacion() {
 
     const licitacionId = nuevaLicitacion.id;
 
-    // 👉 2) Insertar ÍTEMS
+    // 2. Insertar ítems
     for (const it of items) {
       const { error: errorItem } = await supabase
         .from("items_licitacion")
@@ -84,12 +86,13 @@ export default function CrearLicitacion() {
       }
     }
 
-    alert("Licitación creada con éxito.");
+    alert("Licitación creada con éxito");
 
-    // 👉 Reset del formulario
+    // Reset de formulario
     setNombre("");
     setFecha("");
     setListado("1");
+    setEstado("En espera");
     setItems([{ producto: "", unidad: "", cantidad: 0, precio: 0 }]);
   }
 
@@ -102,7 +105,7 @@ export default function CrearLicitacion() {
 
       {/* Card de cabecera */}
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl p-6 mb-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
 
           {/* Nombre */}
           <div>
@@ -130,7 +133,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
-          {/* Select lista de precios */}
+          {/* Lista precios */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Lista de Precios
@@ -146,6 +149,24 @@ export default function CrearLicitacion() {
               <option value="4">Lista 4</option>
             </select>
           </div>
+
+          {/* Estado */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Estado
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              value={estado}
+              onChange={(e) => setEstado(e.target.value)}
+            >
+              <option>En espera</option>
+              <option>Adjudicada</option>
+              <option>Perdida</option>
+              <option>Desierta</option>
+            </select>
+          </div>
+
         </div>
       </div>
 
@@ -158,7 +179,6 @@ export default function CrearLicitacion() {
             key={index}
             className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-white border border-gray-400/20 rounded-lg p-4 shadow-sm"
           >
-            {/* Producto */}
             <input
               className="rounded-md border border-gray-400/30 px-3 py-2 bg-gray-50"
               placeholder="Producto"
@@ -168,7 +188,6 @@ export default function CrearLicitacion() {
               }
             />
 
-            {/* Unidad */}
             <input
               className="rounded-md border border-gray-400/30 px-3 py-2 bg-gray-50"
               placeholder="Unidad"
@@ -178,7 +197,6 @@ export default function CrearLicitacion() {
               }
             />
 
-            {/* Cantidad */}
             <div>
               <label className="block text-xs text-gray-600 mb-1">
                 Cantidad
@@ -193,7 +211,6 @@ export default function CrearLicitacion() {
               />
             </div>
 
-            {/* Precio */}
             <div>
               <label className="block text-xs text-gray-600 mb-1">
                 Precio Unitario
@@ -208,7 +225,6 @@ export default function CrearLicitacion() {
               />
             </div>
 
-            {/* Total calculado */}
             <div className="flex items-end font-semibold text-gray-900">
               ${it.cantidad * it.precio}
             </div>

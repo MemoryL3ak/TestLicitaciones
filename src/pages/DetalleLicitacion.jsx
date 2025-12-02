@@ -1,219 +1,416 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, Link } from "react-router-dom";
+import Toast from "../components/Toast";
 
 export default function DetalleLicitacion() {
   const { id } = useParams();
-  const [lici, setLici] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [licitacion, setLicitacion] = useState(null);
+  const [productos, setProductos] = useState([]);
+  const [precios, setPrecios] = useState([]);
   const [items, setItems] = useState([]);
+  const [toast, setToast] = useState(null);
 
-  // Cargar datos
-  async function loadData() {
-    const { data: licitacion } = await supabase
-      .from("licitaciones")
-      .select("*")
-      .eq("id", id)
-      .single();
+  // -------------------------------------------------------
+  // CARGA INICIAL
+  // -------------------------------------------------------
+  useEffect(() => {
+    async function cargar() {
+      setLoading(true);
 
-    setLici(licitacion);
+      const { data: lic } = await supabase
+        .from("licitaciones")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-    const { data: its } = await supabase
-      .from("items_licitacion")
-      .select("*")
-      .eq("licitacion_id", id)
-      .order("id", { ascending: true });
+      const { data: productosDB } = await supabase
+        .from("productos")
+        .select("*");
 
-    setItems(its || []);
+      const { data: preciosDB } = await supabase
+        .from("precios_productos")
+        .select("*");
+
+      const { data: its } = await supabase
+        .from("items_licitacion")
+        .select("*")
+        .eq("licitacion_id", id);
+
+      setLicitacion(lic);
+      setProductos(productosDB || []);
+      setPrecios(preciosDB || []);
+
+      setItems(
+        (its || []).map((i) => ({
+          id_item: i.id,
+          sku: i.sku,
+          producto: i.producto,
+          categoria: i.categoria || "",
+          formato: i.formato || i.unidad || "",
+          cantidad: Number(i.cantidad),
+          precio: Number(i.valor_unitario),
+          total: Number(i.cantidad) * Number(i.valor_unitario) * 1.19,
+        }))
+      );
+
+      setLoading(false);
+    }
+
+    cargar();
+  }, [id]);
+
+  // -------------------------------------------------------
+  // AGREGAR ÍTEM
+  // -------------------------------------------------------
+  function agregarItem() {
+    setItems([
+      ...items,
+      {
+        id_item: null,
+        sku: "",
+        producto: "",
+        categoria: "",
+        formato: "",
+        cantidad: 0,
+        precio: 0,
+        total: 0,
+      },
+    ]);
   }
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // -------------------------------------------------------
+  // ELIMINAR ÍTEM
+  // -------------------------------------------------------
+  async function eliminarItem(index) {
+    const target = items[index];
 
-  // Actualizar estado en Supabase
-  async function actualizarEstado(nuevoEstado) {
-    setLici((prev) => ({ ...prev, estado: nuevoEstado }));
+    if (!confirm("¿Eliminar este ítem?")) return;
 
+    if (target.id_item) {
+      await supabase.from("items_licitacion").delete().eq("id", target.id_item);
+    }
+
+    const copia = [...items];
+    copia.splice(index, 1);
+    setItems(copia);
+
+    setToast({
+      type: "success",
+      message: "Ítem eliminado",
+    });
+  }
+
+  // -------------------------------------------------------
+  // MATCHCODE SKU ↔ PRODUCTO
+  // -------------------------------------------------------
+  function actualizarItem(index, campo, valor) {
+    const copia = [...items];
+    let item = { ...copia[index] };
+
+    item[campo] = valor;
+
+    let prod = null;
+
+    if (campo === "sku") prod = productos.find((p) => p.sku === valor);
+    if (campo === "producto") prod = productos.find((p) => p.nombre === valor);
+
+    if (prod) {
+      item.sku = prod.sku;
+      item.producto = prod.nombre;
+      item.categoria = prod.categoria || "";
+      item.formato = prod.formato || "";
+
+      const precioLista = precios.find(
+        (p) =>
+          p.sku === prod.sku &&
+          p.lista === licitacion.lista_precios
+      );
+
+      if (precioLista) item.precio = Number(precioLista.precio);
+    }
+
+    item.total = Number(item.cantidad) * Number(item.precio) * 1.19;
+
+    copia[index] = item;
+    setItems(copia);
+  }
+
+  // -------------------------------------------------------
+  // GUARDAR CAMBIOS
+  // -------------------------------------------------------
+  async function guardarCambios() {
     await supabase
       .from("licitaciones")
-      .update({ estado: nuevoEstado })
+      .update({
+        nombre: licitacion.nombre,
+        fecha: licitacion.fecha,
+        estado: licitacion.estado,
+        rut_entidad: licitacion.rut_entidad,
+        nombre_entidad: licitacion.nombre_entidad,
+      })
       .eq("id", id);
+
+    for (const it of items) {
+      if (it.id_item) {
+        await supabase
+          .from("items_licitacion")
+          .update({
+            sku: it.sku,
+            producto: it.producto,
+            categoria: it.categoria,
+            formato: it.formato,
+            cantidad: Number(it.cantidad),
+            valor_unitario: Number(it.precio),
+          })
+          .eq("id", it.id_item);
+      } else {
+        await supabase.from("items_licitacion").insert([
+          {
+            licitacion_id: id,
+            sku: it.sku,
+            producto: it.producto,
+            categoria: it.categoria,
+            formato: it.formato,
+            cantidad: Number(it.cantidad),
+            valor_unitario: Number(it.precio),
+          },
+        ]);
+      }
+    }
+
+    setToast({
+      type: "success",
+      message: "Cambios guardados con éxito",
+    });
   }
 
-  const badge = (n) => {
-    const base =
-      "px-2.5 py-0.5 rounded-full text-xs font-medium flex items-center justify-center";
-
-    switch (String(n)) {
-      case "1": return base + " bg-blue-100 text-blue-700";
-      case "2": return base + " bg-green-100 text-green-700";
-      case "3": return base + " bg-purple-100 text-purple-700";
-      case "4": return base + " bg-orange-100 text-orange-700";
-      default: return base + " bg-gray-200 text-gray-700";
-    }
-  };
-
-  // Total general
-  const totalGeneral = items.reduce(
-    (acc, it) => acc + Number(it.total),
-    0
-  );
-
-  if (!lici)
-    return (
-      <div className="p-10 text-center text-gray-600">
-        Cargando detalle...
-      </div>
-    );
+  // -------------------------------------------------------
+  // UI
+  // -------------------------------------------------------
+  if (loading) return <div className="p-10">Cargando...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      
-      {/* Título */}
-      <div className="flex items-center justify-between mb-10">
-        <h1 className="text-3xl font-semibold text-gray-900">
-          Detalle de Licitación #{id}
-        </h1>
+    <div className="mx-auto max-w-6xl p-8">
 
-        <Link
-          to="/listar"
-          className="cursor-pointer text-sm text-blue-600 hover:text-blue-800 transition"
-        >
-          ← Volver al listado
-        </Link>
-      </div>
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
 
-      {/* Tarjeta resumen */}
-      <div className="bg-white border border-gray-300/30 rounded-xl shadow-sm p-6 mb-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <h1 className="text-3xl font-bold mb-6">
+        Detalle de Licitación #{id}
+      </h1>
 
-          {/* Nombre */}
+      <Link to="/listar" className="text-blue-600 hover:text-blue-800 mb-6 block">
+        ← Volver al listado
+      </Link>
+
+      {/* CABECERA */}
+      <div className="bg-white border border-gray-400/30 rounded-xl shadow-sm p-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
           <div>
-            <p className="text-sm text-gray-600">Nombre</p>
-            <p className="text-lg font-medium text-gray-900 mt-1">
-              {lici.nombre}
-            </p>
+            <label className="text-sm font-medium text-gray-700">Nombre</label>
+            <input
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              value={licitacion.nombre}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, nombre: e.target.value })
+              }
+            />
           </div>
 
-          {/* Fecha */}
           <div>
-            <p className="text-sm text-gray-600">Fecha</p>
-            <p className="text-lg font-medium text-gray-900 mt-1">
-              {lici.fecha
-                ? lici.fecha.slice(0, 10).split("-").reverse().join("-")
-                : ""}
-            </p>
+            <label className="text-sm font-medium text-gray-700">Fecha</label>
+            <input
+              type="date"
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              value={licitacion.fecha}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, fecha: e.target.value })
+              }
+            />
           </div>
 
-          {/* Lista de precios */}
           <div>
-            <p className="text-sm text-gray-600 mb-1">Lista de Precios</p>
-            <span className={badge(lici.lista_precios)}>
-              Lista {lici.lista_precios}
-            </span>
-          </div>
-
-          {/* Estado (SIEMPRE EDITABLE) */}
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Estado</p>
-
+            <label className="text-sm font-medium text-gray-700">Estado</label>
             <select
-              value={lici.estado || "En espera"}
-              onChange={(e) => actualizarEstado(e.target.value)}
-              className="
-                w-full
-                rounded-md
-                border border-gray-300
-                bg-gray-50
-                px-3 py-2
-                text-sm text-gray-900
-                shadow-sm
-                focus:outline-none
-                focus:ring-2 focus:ring-blue-500
-                transition
-              "
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              value={licitacion.estado}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, estado: e.target.value })
+              }
             >
-              <option value="En espera">En espera</option>
-              <option value="Adjudicada">Adjudicada</option>
-              <option value="Perdida">Perdida</option>
-              <option value="Desierta">Desierta</option>
+              <option>En espera</option>
+              <option>Adjudicada</option>
+              <option>Perdida</option>
+              <option>Desierta</option>
             </select>
+          </div>
 
+          <div>
+            <label className="text-sm font-medium text-gray-700">RUT Entidad</label>
+            <input
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              value={licitacion.rut_entidad}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, rut_entidad: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">Nombre Entidad</label>
+            <input
+              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              value={licitacion.nombre_entidad}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, nombre_entidad: e.target.value })
+              }
+            />
           </div>
 
         </div>
+      </div>
 
-        {/* Creado por */}
-        <div className="mt-8">
-          <p className="text-sm text-gray-600">Creado por</p>
-          <p className="text-md font-medium text-gray-900 mt-1">
-            {lici.creado_por}
-          </p>
+      {/* ÍTEMS */}
+      <h2 className="text-xl font-semibold mb-4">Ítems</h2>
+
+
+
+
+
+
+
+<div className="space-y-4">
+  {items.map((it, index) => (
+    <div
+      key={index}
+      className="grid grid-cols-1 md:grid-cols-8 gap-4 bg-white border border-gray-400/30 rounded-xl shadow-sm p-4"
+    >
+
+      {/* SKU */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">SKU</label>
+        <select
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
+          value={it.sku}
+          onChange={(e) => actualizarItem(index, "sku", e.target.value)}
+        >
+          <option value="">Seleccionar</option>
+          {productos.map((p) => (
+            <option key={p.id} value={p.sku}>{p.sku}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Producto */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Producto</label>
+        <select
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
+          value={it.producto}
+          onChange={(e) => actualizarItem(index, "producto", e.target.value)}
+        >
+          <option value="">Seleccionar</option>
+          {productos.map((p) => (
+            <option key={p.id} value={p.nombre}>{p.nombre}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Categoría */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Categoría</label>
+        <input
+          readOnly
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-100 px-3 text-sm"
+          value={it.categoria}
+        />
+      </div>
+
+      {/* Formato */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Formato</label>
+        <input
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
+          value={it.formato}
+          onChange={(e) => actualizarItem(index, "formato", e.target.value)}
+        />
+      </div>
+
+      {/* Cantidad */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Cantidad</label>
+        <input
+          type="number"
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
+          value={it.cantidad}
+          onChange={(e) => actualizarItem(index, "cantidad", e.target.value)}
+        />
+      </div>
+
+      {/* Precio */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Precio Unitario</label>
+        <input
+          type="number"
+          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
+          value={it.precio}
+          onChange={(e) => actualizarItem(index, "precio", e.target.value)}
+        />
+      </div>
+
+      {/* Total */}
+      <div>
+        <label className="text-xs font-medium text-gray-600">Total</label>
+        <div className="h-10 flex items-center px-2 font-semibold">
+          ${Number(it.total).toLocaleString("es-CL")}
         </div>
       </div>
 
-      {/* Tabla de ítems */}
-      <div className="bg-white border border-gray-300/30 rounded-xl shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-300/40">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Producto
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Unidad
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Cantidad
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Precio Unitario
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Total
-              </th>
-            </tr>
-          </thead>
-
-          <tbody className="bg-white divide-y divide-gray-200/60">
-            {items.map((it) => (
-              <tr key={it.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 text-sm text-gray-900">
-                  {it.producto}
-                </td>
-
-                <td className="px-6 py-4 text-sm text-gray-700">
-                  {it.unidad}
-                </td>
-
-                <td className="px-6 py-4 text-right text-sm text-gray-700">
-                  {it.cantidad}
-                </td>
-
-                <td className="px-6 py-4 text-right text-sm text-gray-700">
-                  ${it.valor_unitario}
-                </td>
-
-                <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                  ${it.total}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-
-          {/* Total General */}
-          <tfoot>
-            <tr className="bg-gray-50">
-              <td colSpan="4" className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                Total General:
-              </td>
-              <td className="px-6 py-4 text-right text-lg font-bold text-gray-900">
-                ${totalGeneral}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+      {/* Eliminar */}
+      <div className="flex items-end">
+        <button
+          onClick={() => eliminarItem(index)}
+          className="bg-red-600 text-white px-3 py-2 rounded-md shadow hover:bg-red-700 cursor-pointer"
+        >
+          Eliminar
+        </button>
       </div>
+
+    </div>
+  ))}
+</div>
+
+
+
+
+
+
+
+      {/* AGREGAR ÍTEM */}
+      <button
+        onClick={agregarItem}
+        className="mt-6 bg-green-600 text-white px-4 py-2 rounded-md shadow cursor-pointer hover:bg-green-700"
+      >
+        + Agregar Ítem
+      </button>
+
+      {/* GUARDAR */}
+      <button
+        onClick={guardarCambios}
+        className="mt-6 ml-4 bg-blue-600 text-white px-6 py-2 rounded-md shadow cursor-pointer hover:bg-blue-700"
+      >
+        Guardar Cambios
+      </button>
+
     </div>
   );
 }

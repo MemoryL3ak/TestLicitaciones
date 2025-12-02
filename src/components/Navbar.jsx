@@ -16,7 +16,13 @@ export default function Navbar() {
         <div className="flex gap-6 text-sm font-medium text-gray-700">
           <Link className="hover:text-gray-900 transition" to="/crear">Crear Licitación</Link>
           <Link className="hover:text-gray-900 transition" to="/listar">Ver Licitaciones</Link>
-          {/* <Link className="hover:text-gray-900 transition" to="/configuracion">Configuración</Link> */}
+          {/* <Link className="hover:text-gray-900 transition" to="/configuracion">Configuración
+          </Link> */
+          <Link className="hover:text-gray-900 transition" to="/productos">Productos</Link>
+
+          
+          }
+
         </div>
 
         <button

@@ -252,7 +252,44 @@ export default function CrearLicitacion() {
     setToast({
       type: "success",
       message: `La licitación "${nombre}" fue creada exitosamente.`,
+
+
+      
     });
+
+
+// 🔥 GENERAR PDF AUTOMÁTICAMENTE
+  // ---------------------------------------
+  await generarPDFcotizacion({
+    numero_licitacion: idLicitacion, // <-- ID REAL
+    fecha_emision: fechaHoy,
+    nombre_entidad: nombreEntidad,
+    rut_entidad: rutEntidad,
+    items_tabla: items
+      .map(
+        (it) => `
+        <tr>
+          <td>${it.sku}</td>
+          <td>${it.producto}</td>
+          <td>${it.cantidad}</td>
+          <td>$ ${it.precio}</td>
+          <td>0%</td>
+          <td>$ ${it.total}</td>
+        </tr>
+      `
+      )
+      .join(""),
+    descuento_total: 0,
+    afecto: totalSinIVA,
+    iva: totalIVA,
+    total_con_iva: totalConIVA
+  });
+
+
+
+
+
+
 
     // RESET
     setIdLicitacionInput("");
@@ -310,6 +347,8 @@ async function exportarPDF() {
     iva: totalIVA,
     total_con_iva: totalConIVA,
 });
+
+
 
 }
 
@@ -641,41 +680,6 @@ async function exportarPDF() {
           Guardar Licitación
         </button>
 
-
-
-<button
-    className="bg-[#4b89ac] hover:bg-[#3A6F8C] text-white px-6 py-2 rounded-md shadow hover:shadow-md transition cursor-pointer"
-    onClick={async () => {
-        const datos = {
-            numero_licitacion: idLicitacionInput,
-            fecha_emision: new Date().toISOString().slice(0, 10),
-            nombre_entidad: nombreEntidad,
-            rut_entidad: rutEntidad,
-
-            items_tabla: items
-                .map((item) => `
-                    <tr>
-                        <td>${item.sku}</td>
-                        <td>${item.producto}</td>
-                        <td>${item.cantidad}</td>
-                        <td>$ ${item.precio}</td>
-                        <td>0%</td>
-                        <td>$ ${item.total}</td>
-                    </tr>
-                `)
-                .join(""),
-
-            descuento_total: 0,
-            afecto: totalSinIVA,
-            iva: totalIVA,
-            total_con_iva: totalConIVA
-        };
-
-        await generarPDFcotizacion(datos);
-    }}
->
-    Generar PDF
-</button>
 
 
 

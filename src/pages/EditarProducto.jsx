@@ -14,9 +14,6 @@ export default function EditarProducto() {
     nombre: "",
     categoria: "",
     formato: "",
-  });
-
-  const [precios, setPrecios] = useState({
     lista1: "",
     lista2: "",
     lista3: "",
@@ -24,38 +21,36 @@ export default function EditarProducto() {
   });
 
   // -------------------------------------------------------
-  // CARGA INICIAL
+  // CARGAR PRODUCTO DESDE LA NUEVA TABLA
   // -------------------------------------------------------
   useEffect(() => {
     async function cargar() {
       setLoading(true);
 
-      // PRODUCTO
-      const { data: prod } = await supabase
+      const { data: prod, error } = await supabase
         .from("productos")
         .select("*")
         .eq("id", id)
         .single();
 
-      // PRECIOS
-      const { data: preciosDB } = await supabase
-        .from("precios_productos")
-        .select("*")
-        .eq("sku", prod.sku)
-        .order("lista");
+      if (error || !prod) {
+        console.error(error);
+        setToast({
+          type: "error",
+          message: "Error al cargar el producto.",
+        });
+        return;
+      }
 
       setProducto({
-        sku: prod.sku,
-        nombre: prod.nombre,
+        sku: prod.sku?.trim() || "",
+        nombre: prod.nombre || "",
         categoria: prod.categoria || "",
         formato: prod.formato || "",
-      });
-
-      setPrecios({
-        lista1: preciosDB?.find((p) => p.lista === 1)?.precio || "",
-        lista2: preciosDB?.find((p) => p.lista === 2)?.precio || "",
-        lista3: preciosDB?.find((p) => p.lista === 3)?.precio || "",
-        lista4: preciosDB?.find((p) => p.lista === 4)?.precio || "",
+        lista1: prod.lista1 ?? "",
+        lista2: prod.lista2 ?? "",
+        lista3: prod.lista3 ?? "",
+        lista4: prod.lista4 ?? "",
       });
 
       setLoading(false);
@@ -65,39 +60,37 @@ export default function EditarProducto() {
   }, [id]);
 
   // -------------------------------------------------------
-  // GUARDAR CAMBIOS
+  // GUARDAR CAMBIOS (NUEVO MODELO)
   // -------------------------------------------------------
   async function guardarCambios() {
-    // Actualizar producto
-    await supabase
+    const skuLimpio = String(producto.sku).trim();
+
+    const { error } = await supabase
       .from("productos")
       .update({
-        sku: producto.sku,
+        sku: skuLimpio,
         nombre: producto.nombre,
         categoria: producto.categoria,
         formato: producto.formato,
+        lista1: Number(producto.lista1) || 0,
+        lista2: Number(producto.lista2) || 0,
+        lista3: Number(producto.lista3) || 0,
+        lista4: Number(producto.lista4) || 0,
       })
       .eq("id", id);
 
-    // Actualizar precios
-    const updates = [
-      { lista: 1, precio: precios.lista1 },
-      { lista: 2, precio: precios.lista2 },
-      { lista: 3, precio: precios.lista3 },
-      { lista: 4, precio: precios.lista4 },
-    ];
-
-    for (const u of updates) {
-      await supabase
-        .from("precios_productos")
-        .update({ precio: Number(u.precio) })
-        .eq("sku", producto.sku)
-        .eq("lista", u.lista);
+    if (error) {
+      console.error(error);
+      setToast({
+        type: "error",
+        message: "❌ No se pudo guardar el producto.",
+      });
+      return;
     }
 
     setToast({
       type: "success",
-      message: "Producto actualizado con éxito",
+      message: "Producto actualizado con éxito.",
     });
   }
 
@@ -105,7 +98,7 @@ export default function EditarProducto() {
 
   return (
     <div className="mx-auto max-w-4xl p-8">
-      
+
       {toast && (
         <Toast
           type={toast.type}
@@ -125,7 +118,6 @@ export default function EditarProducto() {
         ← Volver al listado
       </Link>
 
-      {/* CONTENEDOR PRINCIPAL */}
       <div className="bg-white border border-gray-300/40 shadow-sm rounded-xl p-8">
 
         {/* SKU */}
@@ -136,7 +128,7 @@ export default function EditarProducto() {
           className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 mb-6"
           value={producto.sku}
           onChange={(e) =>
-            setProducto({ ...producto, sku: e.target.value })
+            setProducto({ ...producto, sku: String(e.target.value).trim() })
           }
         />
 
@@ -162,7 +154,7 @@ export default function EditarProducto() {
           onChange={(e) =>
             setProducto({ ...producto, categoria: e.target.value })
           }
-          placeholder="Ej: Limpieza, Protección, Insumos médicos…"
+          placeholder="Ej: Higiene, Insumos Médicos…"
         />
 
         {/* FORMATO */}
@@ -175,7 +167,7 @@ export default function EditarProducto() {
           onChange={(e) =>
             setProducto({ ...producto, formato: e.target.value })
           }
-          placeholder="Ej: Bidón, Caja, Botella…"
+          placeholder="Ej: Unidad, Caja, Bidón…"
         />
 
         {/* LISTAS DE PRECIOS */}
@@ -184,15 +176,14 @@ export default function EditarProducto() {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
           <div>
             <label className="text-sm text-gray-700">Lista 1</label>
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-              value={precios.lista1}
+              value={producto.lista1}
               onChange={(e) =>
-                setPrecios({ ...precios, lista1: e.target.value })
+                setProducto({ ...producto, lista1: e.target.value })
               }
             />
           </div>
@@ -202,9 +193,9 @@ export default function EditarProducto() {
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-              value={precios.lista2}
+              value={producto.lista2}
               onChange={(e) =>
-                setPrecios({ ...precios, lista2: e.target.value })
+                setProducto({ ...producto, lista2: e.target.value })
               }
             />
           </div>
@@ -214,9 +205,9 @@ export default function EditarProducto() {
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-              value={precios.lista3}
+              value={producto.lista3}
               onChange={(e) =>
-                setPrecios({ ...precios, lista3: e.target.value })
+                setProducto({ ...producto, lista3: e.target.value })
               }
             />
           </div>
@@ -226,13 +217,12 @@ export default function EditarProducto() {
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2"
-              value={precios.lista4}
+              value={producto.lista4}
               onChange={(e) =>
-                setPrecios({ ...precios, lista4: e.target.value })
+                setProducto({ ...producto, lista4: e.target.value })
               }
             />
           </div>
-
         </div>
 
         {/* BOTÓN */}
@@ -242,7 +232,6 @@ export default function EditarProducto() {
         >
           Guardar Cambios
         </button>
-
       </div>
     </div>
   );

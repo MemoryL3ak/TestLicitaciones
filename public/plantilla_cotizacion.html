@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+
+<style>
+    @page { size: letter; margin: 25mm; }
+
+    body {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        color: #1f1f1f;
+        position: relative;
+        background: #fff;
+    }
+
+    /* -------------------------------------------- */
+    /* MARCA DE AGUA (centrada en tabla de productos) */
+    /* -------------------------------------------- */
+.marca-agua {
+    position: absolute;
+    top: 85%;                 /* MÁS ABAJO (ANTES 45%) */
+    left: 50%;
+    width: 550px;             /* UN POCO MÁS GRANDE */
+    opacity: 0.22;            /* MÁS NÍTIDA (ANTES 0.15) */
+    transform: translate(-50%, -50%);
+    z-index: -1;
+    filter: contrast(180%) brightness(130%); /* MAYOR DEFINICIÓN */
+    pointer-events: none;
+}
+
+    /* HEADER */
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid #4b89ac;
+        padding-bottom: 10px;
+    }
+
+    .logo {
+        width: 230px;
+    }
+
+    .empresa-info {
+        text-align: left;
+        font-size: 12px;
+    }
+
+    .empresa-nombre {
+        font-size: 17px;
+        font-weight: bold;
+        color: #1d4f67;
+        margin-bottom: 2px;
+    }
+
+    /* COTIZACIÓN BOX */
+    .cot-box {
+        border: 2px solid #4b89ac;
+        padding: 12px;
+        width: 230px;
+        text-align: center;
+        font-weight: bold;
+        color: #1d4f67;
+    }
+
+    .cot-titulo {
+        font-size: 18px;
+        margin-bottom: 5px;
+    }
+
+    /* TITULOS */
+    .section-title {
+        font-weight: bold;
+        color: #1d4f67;
+        font-size: 13px;
+        margin-top: 18px;
+        margin-bottom: 6px;
+    }
+
+    /* TABLAS */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+
+    th {
+        background: #eef3f6;
+        padding: 6px;
+        border: 1px solid #bfcbd2;
+        color: #1d4f67;
+        font-weight: bold;
+    }
+
+    td {
+        padding: 5px;
+        border: 1px solid #cdd5db;
+    }
+
+    /* CLIENTE */
+    .cliente-table td {
+        border: none;
+        padding: 3px 0;
+    }
+
+    .label {
+        font-weight: bold;
+        color: #1d4f67;
+        width: 80px;
+    }
+
+    /* TOTAL */
+    .totales {
+        width: 250px;
+        float: right;
+        margin-top: 20px;
+        border: 1px solid #bfcbd2;
+    }
+
+    .totales td {
+        border: none;
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+
+    .tot-label {
+        color: #1d4f67;
+        font-weight: bold;
+    }
+
+    /* BANK INFO */
+    .bank-table {
+        margin-top: 35px;
+        width: 45%;
+        font-size: 11px;
+    }
+
+    .bank-table td {
+        border: 1px solid #bfcbd2;
+        padding: 6px;
+    }
+
+    .bank-header {
+        text-align: center;
+        font-weight: bold;
+        background: #eef3f6;
+        color: #1d4f67;
+        border: 1px solid #bfcbd2;
+    }
+</style>
+</head>
+
+<body>
+
+<!-- MARCA DE AGUA, AHORA CENTRADA EN LA TABLA -->
+<img class="marca-agua" 
+     src="https://i.ibb.co/d1QyPvm/logo-marca-agua.png"
+     crossOrigin="anonymous"
+/>
+
+<!-- HEADER -->
+<div class="header">
+    <div style="display:flex; gap: 12px;">
+<img class="logo" 
+     src="https://i.ibb.co/RGb0W84B/Amsodent.png"
+     crossOrigin="anonymous"
+/>
+        <div class="empresa-info">
+            <div class="empresa-nombre">AmsodentMedical Spa</div>
+            R.U.T.: 78.087.954-8<br>
+            Giro: Venta de Insumos Médicos y Dentales<br>
+            Matriz: 5 poniente 413, Viña del Mar, Viña del Mar<br>
+            Tel: +56968302424<br>
+            Email: contacto@amsodentmedical.cl
+        </div>
+    </div>
+
+    <div class="cot-box">
+        <div class="cot-titulo">COTIZACIÓN</div>
+        Nº {{numero_licitacion}}
+    </div>
+</div>
+
+<!-- FECHA -->
+<div class="section-title">Fecha de Emisión</div>
+{{fecha_emision}}
+
+<!-- CLIENTE -->
+<div class="section-title">Datos del Cliente</div>
+<table class="cliente-table">
+    <tr>
+        <td class="label">Señor(es):</td><td>{{nombre_entidad}}</td>
+        <td class="label">Contacto:</td><td></td>
+    </tr>
+    <tr>
+        <td class="label">RUT:</td><td>{{rut_entidad}}</td>
+        <td class="label">Email:</td><td></td>
+    </tr>
+    <tr>
+        <td class="label">Dirección:</td><td></td>
+        <td class="label">Teléfono:</td><td></td>
+    </tr>
+    <tr>
+        <td class="label">Ciudad:</td><td></td>
+        <td class="label">Cond. Venta:</td><td></td>
+    </tr>
+</table>
+
+<!-- ITEMS -->
+<div class="section-title">Detalle de Productos</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>Cant.</th>
+            <th>Precio</th>
+            <th>Descuento</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{items_tabla}}
+    </tbody>
+</table>
+
+<!-- TOTALES -->
+<table class="totales">
+    <tr><td class="tot-label">Descuento:</td><td>$ {{descuento_total}}</td></tr>
+    <tr><td class="tot-label">Exento:</td><td>$ 0</td></tr>
+    <tr><td class="tot-label">Afecto:</td><td>$ {{afecto}}</td></tr>
+    <tr><td class="tot-label">IVA 19%:</td><td>$ {{iva}}</td></tr>
+    <tr>
+        <td class="tot-label" style="font-size:14px;">TOTAL:</td>
+        <td style="font-size:14px; font-weight:bold;">$ {{total_con_iva}}</td>
+    </tr>
+</table>
+
+<!-- DATOS BANCARIOS -->
+<table class="bank-table">
+    <tr><td colspan="2" class="bank-header">DATOS PARA TRANSFERENCIA BANCARIA</td></tr>
+    <tr><td>Banco:</td><td>Banco Santander Chile</td></tr>
+    <tr><td>Cuenta Corriente:</td><td>96608446</td></tr>
+    <tr><td>R.U.T.:</td><td>78.087.954-8</td></tr>
+    <tr><td>Empresa:</td><td>Amsodent Medical Spa</td></tr>
+    <tr><td>Aviso Email:</td><td>contacto@amsodentmedical.cl</td></tr>
+</table>
+
+</body>
+</html>

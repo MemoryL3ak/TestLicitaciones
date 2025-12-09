@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, Link } from "react-router-dom";
 import Toast from "../components/Toast";
+import Select from "react-select";
+
+/* ---------------------------------------------
+   FUNCIÓN DE REDONDEO
+--------------------------------------------- */
+function redondear(valor) {
+  const entero = Math.floor(valor);
+  const decimal = valor - entero;
+  return decimal >= 0.5 ? entero + 1 : entero;
+}
 
 export default function DetalleLicitacion() {
   const { id } = useParams();
@@ -9,31 +19,31 @@ export default function DetalleLicitacion() {
   const [loading, setLoading] = useState(true);
   const [licitacion, setLicitacion] = useState(null);
   const [productos, setProductos] = useState([]);
-  const [precios, setPrecios] = useState([]);
   const [items, setItems] = useState([]);
   const [toast, setToast] = useState(null);
 
-  // -------------------------------------------------------
-  // CARGA INICIAL
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     CARGA INICIAL
+--------------------------------------------- */
   useEffect(() => {
     async function cargar() {
       setLoading(true);
 
+      // LICITACIÓN
       const { data: lic } = await supabase
         .from("licitaciones")
         .select("*")
         .eq("id", id)
         .single();
 
+      // PRODUCTOS
       const { data: productosDB } = await supabase
         .from("productos")
-        .select("*");
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(20000);
 
-      const { data: preciosDB } = await supabase
-        .from("precios_productos")
-        .select("*");
-
+      // ITEMS
       const { data: its } = await supabase
         .from("items_licitacion")
         .select("*")
@@ -41,18 +51,18 @@ export default function DetalleLicitacion() {
 
       setLicitacion(lic);
       setProductos(productosDB || []);
-      setPrecios(preciosDB || []);
 
+      // Convertir ítems
       setItems(
         (its || []).map((i) => ({
           id_item: i.id,
           sku: i.sku,
           producto: i.producto,
           categoria: i.categoria || "",
-          formato: i.formato || i.unidad || "",
+          formato: i.formato || "",
           cantidad: Number(i.cantidad),
           precio: Number(i.valor_unitario),
-          total: Number(i.cantidad) * Number(i.valor_unitario) * 1.19,
+          total: redondear(Number(i.cantidad) * Number(i.valor_unitario) * 1.19),
         }))
       );
 
@@ -62,9 +72,9 @@ export default function DetalleLicitacion() {
     cargar();
   }, [id]);
 
-  // -------------------------------------------------------
-  // AGREGAR ÍTEM
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     AGREGAR ÍTEM
+--------------------------------------------- */
   function agregarItem() {
     setItems([
       ...items,
@@ -76,17 +86,16 @@ export default function DetalleLicitacion() {
         formato: "",
         cantidad: 0,
         precio: 0,
-        total: 0,
+          total: 0,
       },
     ]);
   }
 
-  // -------------------------------------------------------
-  // ELIMINAR ÍTEM
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     ELIMINAR ÍTEM
+--------------------------------------------- */
   async function eliminarItem(index) {
     const target = items[index];
-
     if (!confirm("¿Eliminar este ítem?")) return;
 
     if (target.id_item) {
@@ -103,9 +112,9 @@ export default function DetalleLicitacion() {
     });
   }
 
-  // -------------------------------------------------------
-  // MATCHCODE SKU ↔ PRODUCTO
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     MATCHCODE + CALCULO
+--------------------------------------------- */
   function actualizarItem(index, campo, valor) {
     const copia = [...items];
     let item = { ...copia[index] };
@@ -113,7 +122,6 @@ export default function DetalleLicitacion() {
     item[campo] = valor;
 
     let prod = null;
-
     if (campo === "sku") prod = productos.find((p) => p.sku === valor);
     if (campo === "producto") prod = productos.find((p) => p.nombre === valor);
 
@@ -123,37 +131,43 @@ export default function DetalleLicitacion() {
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
 
-      const precioLista = precios.find(
-        (p) =>
-          p.sku === prod.sku &&
-          p.lista === licitacion.lista_precios
-      );
+      const lista = Number(licitacion.lista_precios);
+      const llave = `lista${lista}`;
 
-      if (precioLista) item.precio = Number(precioLista.precio);
+      item.precio = Number(prod[llave] ?? 0);
     }
 
-    item.total = Number(item.cantidad) * Number(item.precio) * 1.19;
+    const bruto = Number(item.cantidad) * Number(item.precio) * 1.19;
+    item.total = redondear(bruto);
 
     copia[index] = item;
     setItems(copia);
   }
 
-  // -------------------------------------------------------
-  // GUARDAR CAMBIOS
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     GUARDAR CAMBIOS
+--------------------------------------------- */
   async function guardarCambios() {
     await supabase
       .from("licitaciones")
       .update({
+        id_licitacion: licitacion.id_licitacion,
         nombre: licitacion.nombre,
-        fecha: licitacion.fecha,
-        estado: licitacion.estado,
         rut_entidad: licitacion.rut_entidad,
         nombre_entidad: licitacion.nombre_entidad,
+        departamento: licitacion.departamento,
+        fecha_hora_cierre: licitacion.fecha_hora_cierre,
+        municipalidad: licitacion.municipalidad,
+        monto: Number(licitacion.monto),
+        lista_precios: licitacion.lista_precios,
+        estado: licitacion.estado,
+        // fecha NO se muestra ni se edita → NO SE MODIFICA
       })
       .eq("id", id);
 
     for (const it of items) {
+      const total = redondear(Number(it.cantidad) * Number(it.precio) * 1.19);
+
       if (it.id_item) {
         await supabase
           .from("items_licitacion")
@@ -164,6 +178,7 @@ export default function DetalleLicitacion() {
             formato: it.formato,
             cantidad: Number(it.cantidad),
             valor_unitario: Number(it.precio),
+            total,
           })
           .eq("id", it.id_item);
       } else {
@@ -176,6 +191,7 @@ export default function DetalleLicitacion() {
             formato: it.formato,
             cantidad: Number(it.cantidad),
             valor_unitario: Number(it.precio),
+            total,
           },
         ]);
       }
@@ -187,14 +203,38 @@ export default function DetalleLicitacion() {
     });
   }
 
-  // -------------------------------------------------------
-  // UI
-  // -------------------------------------------------------
+  /* ---------------------------------------------
+     OPCIONES SELECT
+--------------------------------------------- */
+  const opcionesSKU = productos.map((p) => ({
+    value: p.sku,
+    label: p.sku,
+  }));
+
+  const opcionesProducto = productos.map((p) => ({
+    value: p.nombre,
+    label: p.nombre,
+  }));
+
+  const customStyles = {
+    control: (base) => ({
+      ...base,
+      minHeight: "40px",
+      fontSize: "0.875rem",
+    }),
+    menu: (base) => ({
+      ...base,
+      zIndex: 9999,
+    }),
+  };
+
+  /* ---------------------------------------------
+     UI
+--------------------------------------------- */
   if (loading) return <div className="p-10">Cargando...</div>;
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
-
+    <div className="mx-auto max-w-7xl p-8">
       {toast && (
         <Toast
           type={toast.type}
@@ -212,13 +252,26 @@ export default function DetalleLicitacion() {
       </Link>
 
       {/* CABECERA */}
-      <div className="bg-white border border-gray-400/30 rounded-xl shadow-sm p-6 mb-10">
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
+          {/* ID Licitación */}
           <div>
-            <label className="text-sm font-medium text-gray-700">Nombre</label>
+            <label className="text-sm font-medium">ID Licitación</label>
             <input
-              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.id_licitacion || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, id_licitacion: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Nombre */}
+          <div>
+            <label className="text-sm font-medium">Nombre de Licitación</label>
+            <input
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               value={licitacion.nombre}
               onChange={(e) =>
                 setLicitacion({ ...licitacion, nombre: e.target.value })
@@ -226,38 +279,11 @@ export default function DetalleLicitacion() {
             />
           </div>
 
+          {/* RUT */}
           <div>
-            <label className="text-sm font-medium text-gray-700">Fecha</label>
+            <label className="text-sm font-medium">RUT Entidad</label>
             <input
-              type="date"
-              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
-              value={licitacion.fecha}
-              onChange={(e) =>
-                setLicitacion({ ...licitacion, fecha: e.target.value })
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Estado</label>
-            <select
-              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
-              value={licitacion.estado}
-              onChange={(e) =>
-                setLicitacion({ ...licitacion, estado: e.target.value })
-              }
-            >
-              <option>En espera</option>
-              <option>Adjudicada</option>
-              <option>Perdida</option>
-              <option>Desierta</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">RUT Entidad</label>
-            <input
-              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               value={licitacion.rut_entidad}
               onChange={(e) =>
                 setLicitacion({ ...licitacion, rut_entidad: e.target.value })
@@ -265,10 +291,11 @@ export default function DetalleLicitacion() {
             />
           </div>
 
+          {/* Nombre Entidad */}
           <div>
-            <label className="text-sm font-medium text-gray-700">Nombre Entidad</label>
+            <label className="text-sm font-medium">Nombre Entidad</label>
             <input
-              className="w-full rounded-md border border-gray-400/30 bg-gray-50 px-3 py-2"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               value={licitacion.nombre_entidad}
               onChange={(e) =>
                 setLicitacion({ ...licitacion, nombre_entidad: e.target.value })
@@ -276,141 +303,201 @@ export default function DetalleLicitacion() {
             />
           </div>
 
+          {/* Departamento */}
+          <div>
+            <label className="text-sm font-medium">Departamento</label>
+            <input
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.departamento || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, departamento: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Fecha Hora Cierre */}
+          <div>
+            <label className="text-sm font-medium">Fecha y Hora de Cierre</label>
+            <input
+              type="datetime-local"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.fecha_hora_cierre || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, fecha_hora_cierre: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Municipalidad */}
+          <div>
+            <label className="text-sm font-medium">Municipalidad</label>
+            <input
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.municipalidad || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, municipalidad: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Monto */}
+          <div>
+            <label className="text-sm font-medium">Monto</label>
+            <input
+              type="number"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.monto || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, monto: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Lista Precios */}
+          <div>
+            <label className="text-sm font-medium">Lista de Precios</label>
+            <select
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+              value={licitacion.lista_precios}
+              onChange={(e) =>
+                setLicitacion({
+                  ...licitacion,
+                  lista_precios: Number(e.target.value),
+                })
+              }
+            >
+              <option value="1">Lista 1</option>
+              <option value="2">Lista 2</option>
+              <option value="3">Lista 3</option>
+              <option value="4">Lista 4</option>
+            </select>
+          </div>
+
         </div>
       </div>
 
       {/* ÍTEMS */}
-      <h2 className="text-xl font-semibold mb-4">Ítems</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Ítems</h2>
 
+      <div className="space-y-4">
+        {items.map((it, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-1 md:grid-cols-14 gap-4 bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+          >
+            {/* SKU */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-600 mb-1">SKU</label>
+              <Select
+                options={opcionesSKU}
+                styles={customStyles}
+                placeholder="Buscar SKU..."
+                value={opcionesSKU.find((o) => o.value === it.sku) || null}
+                onChange={(op) =>
+                  actualizarItem(index, "sku", op ? op.value : "")
+                }
+              />
+            </div>
 
+            {/* PRODUCTO */}
+            <div className="md:col-span-4">
+              <label className="block text-xs text-gray-600 mb-1">Producto</label>
+              <Select
+                options={opcionesProducto}
+                styles={customStyles}
+                placeholder="Buscar producto..."
+                value={opcionesProducto.find((o) => o.value === it.producto) || null}
+                onChange={(op) =>
+                  actualizarItem(index, "producto", op ? op.value : "")
+                }
+              />
+            </div>
 
+            {/* CATEGORÍA */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-600 mb-1">Categoría</label>
+              <input
+                className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-sm"
+                value={it.categoria}
+                readOnly
+              />
+            </div>
 
+            {/* FORMATO */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-600 mb-1">Formato</label>
+              <input
+                className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+                value={it.formato}
+                onChange={(e) =>
+                  actualizarItem(index, "formato", e.target.value)
+                }
+              />
+            </div>
 
+            {/* CANTIDAD */}
+            <div className="md:col-span-1">
+              <label className="block text-xs text-gray-600 mb-1">Cantidad</label>
+              <input
+                type="number"
+                className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+                value={it.cantidad}
+                onChange={(e) =>
+                  actualizarItem(index, "cantidad", e.target.value)
+                }
+              />
+            </div>
 
+            {/* PRECIO */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-600 mb-1">Precio Unitario</label>
+              <input
+                type="number"
+                className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+                value={it.precio}
+                onChange={(e) =>
+                  actualizarItem(index, "precio", e.target.value)
+                }
+              />
+            </div>
 
-<div className="space-y-4">
-  {items.map((it, index) => (
-    <div
-      key={index}
-      className="grid grid-cols-1 md:grid-cols-8 gap-4 bg-white border border-gray-400/30 rounded-xl shadow-sm p-4"
-    >
+            {/* TOTAL */}
+            <div className="md:col-span-1">
+              <label className="block text-xs text-gray-600 mb-1">Total (c/ IVA)</label>
+              <div className="h-10 flex items-center font-semibold px-2">
+                ${Number(it.total).toLocaleString("es-CL")}
+              </div>
+            </div>
 
-      {/* SKU */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">SKU</label>
-        <select
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
-          value={it.sku}
-          onChange={(e) => actualizarItem(index, "sku", e.target.value)}
-        >
-          <option value="">Seleccionar</option>
-          {productos.map((p) => (
-            <option key={p.id} value={p.sku}>{p.sku}</option>
-          ))}
-        </select>
+            {/* ELIMINAR */}
+            <div className="flex items-end">
+              <button
+                onClick={() => eliminarItem(index)}
+                className="bg-red-600 text-white px-3 py-2 rounded-md shadow hover:bg-red-700 cursor-pointer"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Producto */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Producto</label>
-        <select
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
-          value={it.producto}
-          onChange={(e) => actualizarItem(index, "producto", e.target.value)}
-        >
-          <option value="">Seleccionar</option>
-          {productos.map((p) => (
-            <option key={p.id} value={p.nombre}>{p.nombre}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Categoría */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Categoría</label>
-        <input
-          readOnly
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-100 px-3 text-sm"
-          value={it.categoria}
-        />
-      </div>
-
-      {/* Formato */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Formato</label>
-        <input
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
-          value={it.formato}
-          onChange={(e) => actualizarItem(index, "formato", e.target.value)}
-        />
-      </div>
-
-      {/* Cantidad */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Cantidad</label>
-        <input
-          type="number"
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
-          value={it.cantidad}
-          onChange={(e) => actualizarItem(index, "cantidad", e.target.value)}
-        />
-      </div>
-
-      {/* Precio */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Precio Unitario</label>
-        <input
-          type="number"
-          className="w-full h-10 rounded-md border border-gray-400/30 bg-gray-50 px-3 text-sm"
-          value={it.precio}
-          onChange={(e) => actualizarItem(index, "precio", e.target.value)}
-        />
-      </div>
-
-      {/* Total */}
-      <div>
-        <label className="text-xs font-medium text-gray-600">Total</label>
-        <div className="h-10 flex items-center px-2 font-semibold">
-          ${Number(it.total).toLocaleString("es-CL")}
-        </div>
-      </div>
-
-      {/* Eliminar */}
-      <div className="flex items-end">
+      {/* BOTONES */}
+      <div className="flex gap-4 mt-6">
         <button
-          onClick={() => eliminarItem(index)}
-          className="bg-red-600 text-white px-3 py-2 rounded-md shadow hover:bg-red-700 cursor-pointer"
+          onClick={agregarItem}
+          className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700"
         >
-          Eliminar
+          + Agregar Ítem
+        </button>
+
+        <button
+          onClick={guardarCambios}
+          className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
+        >
+          Guardar Cambios
         </button>
       </div>
-
-    </div>
-  ))}
-</div>
-
-
-
-
-
-
-
-      {/* AGREGAR ÍTEM */}
-      <button
-        onClick={agregarItem}
-        className="mt-6 bg-green-600 text-white px-4 py-2 rounded-md shadow cursor-pointer hover:bg-green-700"
-      >
-        + Agregar Ítem
-      </button>
-
-      {/* GUARDAR */}
-      <button
-        onClick={guardarCambios}
-        className="mt-6 ml-4 bg-blue-600 text-white px-6 py-2 rounded-md shadow cursor-pointer hover:bg-blue-700"
-      >
-        Guardar Cambios
-      </button>
-
     </div>
   );
 }

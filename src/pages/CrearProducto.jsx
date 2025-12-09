@@ -21,8 +21,13 @@ export default function CrearProducto() {
     setPrecios({ ...precios, [lista]: valor });
   }
 
+  // ----------------------------------------------------
+  // GUARDAR PRODUCTO (NUEVA TABLA)
+  // ----------------------------------------------------
   async function guardarProducto() {
-    if (!sku || !nombre || !categoria || !formato) {
+    const skuLimpio = sku.trim();
+
+    if (!skuLimpio || !nombre || !categoria || !formato) {
       setToast({
         type: "error",
         message: "Debes completar SKU, Nombre, Categoría y Formato.",
@@ -30,15 +35,21 @@ export default function CrearProducto() {
       return;
     }
 
-    // GUARDAR PRODUCTO
-    const { data: prodInserted, error: prodError } = await supabase
-      .from("productos")
-      .insert([{ sku, nombre, categoria, formato }])
-      .select()
-      .single();
+    const { error } = await supabase.from("productos").insert([
+      {
+        sku: skuLimpio,
+        nombre,
+        categoria,
+        formato,
+        lista1: Number(precios.lista1) || 0,
+        lista2: Number(precios.lista2) || 0,
+        lista3: Number(precios.lista3) || 0,
+        lista4: Number(precios.lista4) || 0,
+      },
+    ]);
 
-    if (prodError) {
-      console.error(prodError);
+    if (error) {
+      console.error(error);
       setToast({
         type: "error",
         message: "Error al guardar el producto.",
@@ -46,31 +57,12 @@ export default function CrearProducto() {
       return;
     }
 
-    // LISTAS DE PRECIOS
-    const listas = [
-      { lista: 1, precio: precios.lista1 },
-      { lista: 2, precio: precios.lista2 },
-      { lista: 3, precio: precios.lista3 },
-      { lista: 4, precio: precios.lista4 },
-    ];
-
-    for (const l of listas) {
-      if (l.precio) {
-        await supabase.from("precios_productos").insert([
-          {
-            sku,
-            lista: l.lista,
-            precio: Number(l.precio),
-          },
-        ]);
-      }
-    }
-
     setToast({
       type: "success",
       message: "Producto creado con éxito",
     });
 
+    // Limpiar formulario
     setSku("");
     setNombre("");
     setCategoria("");
@@ -90,7 +82,6 @@ export default function CrearProducto() {
       </h1>
 
       <div className="bg-white border border-gray-300/30 shadow-sm rounded-xl p-6">
-
         <div className="grid grid-cols-1 gap-6">
 
           {/* SKU */}
@@ -102,7 +93,7 @@ export default function CrearProducto() {
               className="w-full rounded-md bg-gray-50 border px-3 py-2"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              placeholder="Ej: P001"
+              placeholder="Ej: PH00001"
             />
           </div>
 
@@ -118,7 +109,7 @@ export default function CrearProducto() {
             />
           </div>
 
-          {/* CATEGORÍA */}
+          {/* Categoría */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Categoría
@@ -127,11 +118,11 @@ export default function CrearProducto() {
               className="w-full rounded-md bg-gray-50 border px-3 py-2"
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
-              placeholder="Ej: Limpieza, Protección, Insumos médicos…"
+              placeholder="Ej: Limpieza, Protección…"
             />
           </div>
 
-          {/* FORMATO */}
+          {/* Formato */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Formato
@@ -140,11 +131,11 @@ export default function CrearProducto() {
               className="w-full rounded-md bg-gray-50 border px-3 py-2"
               value={formato}
               onChange={(e) => setFormato(e.target.value)}
-              placeholder="Ej: Bidón, Caja, Bolsa…"
+              placeholder="Ej: Bidón, Caja, Botella…"
             />
           </div>
 
-          {/* LISTAS DE PRECIOS */}
+          {/* Listas de precios */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">
               Listas de Precios
@@ -201,7 +192,6 @@ export default function CrearProducto() {
 
         </div>
 
-        {/* BOTÓN */}
         <div className="mt-6">
           <button
             onClick={guardarProducto}
@@ -210,7 +200,6 @@ export default function CrearProducto() {
             Guardar Producto
           </button>
         </div>
-
       </div>
     </div>
   );

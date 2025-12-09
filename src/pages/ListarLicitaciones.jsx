@@ -13,7 +13,7 @@ export default function ListarLicitaciones() {
   const [filtroEstado, setFiltroEstado] = useState("");
 
   async function loadData() {
-    let { data: licitaciones, error } = await supabase
+    const { data: licitaciones, error } = await supabase
       .from("licitaciones")
       .select("*")
       .order("id", { ascending: false });
@@ -25,63 +25,59 @@ export default function ListarLicitaciones() {
     loadData();
   }, []);
 
-  // Badges
+  // ----------------------------------------------------------------
+  // BADGES
+  // ----------------------------------------------------------------
   const badge = (n) => {
     const base =
       "px-2.5 py-0.5 rounded-full text-xs font-medium flex items-center justify-center";
 
-    switch (String(n)) {
-      case "1": return base + " bg-blue-100 text-blue-700";
-      case "2": return base + " bg-green-100 text-green-700";
-      case "3": return base + " bg-purple-100 text-purple-700";
-      case "4": return base + " bg-orange-100 text-orange-700";
-      default: return base + " bg-gray-200 text-gray-700";
-    }
+    const estilos = {
+      "1": "bg-blue-100 text-blue-700",
+      "2": "bg-green-100 text-green-700",
+      "3": "bg-purple-100 text-purple-700",
+      "4": "bg-orange-100 text-orange-700",
+    };
+
+    return `${base} ${estilos[n] || "bg-gray-200 text-gray-700"}`;
   };
 
   const badgeEstado = (estado) => {
     const base = "px-3 py-1 rounded-full text-xs font-semibold shadow-sm";
 
-    switch (estado) {
-      case "En espera": return base + " bg-yellow-100 text-yellow-800";
-      case "Adjudicada": return base + " bg-green-100 text-green-800";
-      case "Perdida": return base + " bg-red-100 text-red-800";
-      case "Desierta": return base + " bg-gray-200 text-gray-800";
-      default: return base + " bg-gray-200 text-gray-700";
-    }
+    const estilos = {
+      "En espera": "bg-yellow-100 text-yellow-800",
+      Adjudicada: "bg-green-100 text-green-800",
+      Perdida: "bg-red-100 text-red-800",
+      Desierta: "bg-gray-200 text-gray-800",
+    };
+
+    return `${base} ${estilos[estado] || "bg-gray-200 text-gray-700"}`;
   };
 
-  // ============================================================
-  // 🔍 FILTROS (CON RANGO DE FECHA)
-  // ============================================================
+  // ----------------------------------------------------------------
+  // FILTROS
+  // ----------------------------------------------------------------
   const dataFiltrada = data.filter((l) => {
-    const creadoPor = l.creado_por ? l.creado_por.toLowerCase() : "";
+    const creadoPor = (l.creado_por || "").toLowerCase();
     const estado = l.estado || "";
-
     const fecha = l.fecha ? l.fecha.slice(0, 10) : "";
 
-    const desdeOK = filtroFechaDesde
-      ? fecha >= filtroFechaDesde
-      : true;
-
-    const hastaOK = filtroFechaHasta
-      ? fecha <= filtroFechaHasta
-      : true;
+    const desdeOK = filtroFechaDesde ? fecha >= filtroFechaDesde : true;
+    const hastaOK = filtroFechaHasta ? fecha <= filtroFechaHasta : true;
 
     const creadorOK = filtroCreador
       ? creadoPor.includes(filtroCreador.toLowerCase())
       : true;
 
-    const estadoOK = filtroEstado
-      ? estado === filtroEstado
-      : true;
+    const estadoOK = filtroEstado ? estado === filtroEstado : true;
 
     return desdeOK && hastaOK && creadorOK && estadoOK;
   });
 
-  // ============================================================
-  // 📤 EXPORTAR A EXCEL (.xlsx)
-  // ============================================================
+  // ----------------------------------------------------------------
+  // EXPORTAR XLSX
+  // ----------------------------------------------------------------
   const exportarXLSX = () => {
     if (dataFiltrada.length === 0) {
       alert("No hay datos para exportar.");
@@ -94,17 +90,19 @@ export default function ListarLicitaciones() {
       Fecha: l.fecha ? l.fecha.slice(0, 10) : "",
       Lista: l.lista_precios,
       Estado: l.estado || "",
-      "Creado por": l.creado_por || ""
+      "Creado por": l.creado_por || "",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(datosExport);
     const workbook = XLSX.utils.book_new();
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Licitaciones");
-
     XLSX.writeFile(workbook, "licitaciones.xlsx");
   };
 
+  // ----------------------------------------------------------------
+  // RENDER
+  // ----------------------------------------------------------------
   return (
     <div className="max-w-6xl mx-auto p-8">
 
@@ -112,17 +110,14 @@ export default function ListarLicitaciones() {
         Licitaciones
       </h1>
 
-      {/* =======================================================
-          🔍 FILTROS
-      ======================================================= */}
+      {/* -----------------------------------------------------------
+          FILTROS
+      ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-300/40 rounded-xl p-4 mb-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
 
-          {/* Fecha desde */}
           <div>
-            <label className="text-sm font-semibold text-gray-700">
-              Fecha desde
-            </label>
+            <label className="text-sm font-semibold text-gray-700">Fecha desde</label>
             <input
               type="date"
               value={filtroFechaDesde}
@@ -131,11 +126,8 @@ export default function ListarLicitaciones() {
             />
           </div>
 
-          {/* Fecha hasta */}
           <div>
-            <label className="text-sm font-semibold text-gray-700">
-              Fecha hasta
-            </label>
+            <label className="text-sm font-semibold text-gray-700">Fecha hasta</label>
             <input
               type="date"
               value={filtroFechaHasta}
@@ -144,11 +136,8 @@ export default function ListarLicitaciones() {
             />
           </div>
 
-          {/* Creador */}
           <div>
-            <label className="text-sm font-semibold text-gray-700">
-              Creado por
-            </label>
+            <label className="text-sm font-semibold text-gray-700">Creado por</label>
             <input
               type="text"
               placeholder="Correo"
@@ -158,11 +147,8 @@ export default function ListarLicitaciones() {
             />
           </div>
 
-          {/* Estado */}
           <div>
-            <label className="text-sm font-semibold text-gray-700">
-              Estado
-            </label>
+            <label className="text-sm font-semibold text-gray-700">Estado</label>
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
@@ -175,12 +161,13 @@ export default function ListarLicitaciones() {
               <option>Desierta</option>
             </select>
           </div>
+
         </div>
       </div>
 
-      {/* =======================================================
-          📤 BOTÓN EXPORTAR
-      ======================================================= */}
+      {/* -----------------------------------------------------------
+          EXPORTAR
+      ------------------------------------------------------------ */}
       <div className="flex justify-end mb-4">
         <button
           onClick={exportarXLSX}
@@ -190,9 +177,9 @@ export default function ListarLicitaciones() {
         </button>
       </div>
 
-      {/* =======================================================
+      {/* -----------------------------------------------------------
           TABLA
-      ======================================================= */}
+      ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl overflow-hidden">
         <table className="min-w-full divide-y divide-gray-300/40">
           <thead className="bg-gray-50">
@@ -208,6 +195,7 @@ export default function ListarLicitaciones() {
           </thead>
 
           <tbody className="bg-white divide-y divide-gray-200/60">
+
             {dataFiltrada.length === 0 && (
               <tr>
                 <td colSpan="7" className="px-6 py-16 text-center text-gray-500">
@@ -218,6 +206,7 @@ export default function ListarLicitaciones() {
 
             {dataFiltrada.map((l) => (
               <tr key={l.id} className="hover:bg-gray-50 transition">
+
                 <td className="px-6 py-4 text-sm">{l.id}</td>
 
                 <td className="px-6 py-4 text-sm">{l.nombre}</td>
@@ -248,10 +237,11 @@ export default function ListarLicitaciones() {
                     Ver detalle →
                   </Link>
                 </td>
+
               </tr>
             ))}
-          </tbody>
 
+          </tbody>
         </table>
       </div>
     </div>

@@ -5,20 +5,30 @@ export async function generarPDFcotizacion(datos) {
     const resp = await fetch("/plantilla_cotizacion.html");
     let html = await resp.text();
 
+    // Reemplazo tradicional {{campo}}
     Object.entries(datos).forEach(([k, v]) => {
         html = html.replaceAll(`{{${k}}}`, v ?? "");
     });
 
+    // Reemplazo seguro de totales
+    html = html
+        .replaceAll("[[[NETO]]]", datos.afecto ?? "0")
+        .replaceAll("[[[IVA]]]", datos.iva ?? "0")
+        .replaceAll("[[[TOTAL]]]", datos.total_con_iva ?? "0");
+
+    // Crear wrapper oculto
     const wrapper = document.createElement("div");
     wrapper.innerHTML = html;
     wrapper.style.position = "absolute";
     wrapper.style.top = "-9999px";
     wrapper.style.left = "0";
-    wrapper.style.width = "800px";
+    wrapper.style.width = "900px";
     wrapper.style.background = "#FFFFFF";
+    wrapper.style.zIndex = "-1";
 
     document.body.appendChild(wrapper);
 
+    // Esperar carga de imágenes
     await Promise.all(
         [...wrapper.querySelectorAll("img")].map(img => {
             return new Promise(resolve => {
@@ -29,6 +39,7 @@ export async function generarPDFcotizacion(datos) {
         })
     );
 
+    // Convertir a canvas
     const canvas = await html2canvas(wrapper, {
         scale: 2,
         useCORS: true,
@@ -46,7 +57,7 @@ export async function generarPDFcotizacion(datos) {
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = (canvas.height * pageWidth) / canvas.width;
 
-    const margin = 50; // === 2 cm
+    const margin = 40;
 
     pdf.addImage(
         imgData,

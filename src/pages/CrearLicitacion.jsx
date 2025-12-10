@@ -4,7 +4,6 @@ import Toast from "../components/Toast";
 import Select from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
 
-
 // -------------------------------------------
 // REDONDEO
 // -------------------------------------------
@@ -15,21 +14,41 @@ function redondear(valor) {
 }
 
 export default function CrearLicitacion() {
+  // -----------------------------
+  // UI: COLAPSAR ENTIDAD
+  // -----------------------------
+  const [mostrarEntidad, setMostrarEntidad] = useState(true);
+
+  // -----------------------------
+  // DATOS LICITACIÓN
+  // -----------------------------
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
   const [nombre, setNombre] = useState("");
+  const [fechaHoraCierre, setFechaHoraCierre] = useState("");
+  const [monto, setMonto] = useState("");
+  const [listado, setListado] = useState("1");
+
+  // -----------------------------
+  // DATOS ENTIDAD
+  // -----------------------------
   const [rutEntidad, setRutEntidad] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
-
   const [departamento, setDepartamento] = useState("");
-  const [fechaHoraCierre, setFechaHoraCierre] = useState("");
   const [municipalidad, setMunicipalidad] = useState("");
-  const [monto, setMonto] = useState("");
 
-  const [listado, setListado] = useState("1");
+  const [direccion, setDireccion] = useState("");
+  const [ciudad, setCiudad] = useState("");
+  const [contacto, setContacto] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [condVenta, setCondVenta] = useState("");
 
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
 
+  // -----------------------------
+  // ITEMS
+  // -----------------------------
   const [items, setItems] = useState([
     {
       sku: "",
@@ -44,9 +63,9 @@ export default function CrearLicitacion() {
     },
   ]);
 
-  // -------------------------------------------
+  // -----------------------------
   // CARGAR PRODUCTOS
-  // -------------------------------------------
+  // -----------------------------
   useEffect(() => {
     async function cargar() {
       const { data } = await supabase
@@ -60,9 +79,9 @@ export default function CrearLicitacion() {
     cargar();
   }, []);
 
-  // -------------------------------------------
+  // -----------------------------
   // CAMBIO LISTA
-  // -------------------------------------------
+  // -----------------------------
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((it) => {
       if (!it.sku) return it;
@@ -74,16 +93,16 @@ export default function CrearLicitacion() {
       return {
         ...it,
         precio,
-        total: redondear(it.cantidad * precio * 1.19),
+        total: redondear(it.cantidad * precio),
       };
     });
 
     setItems(copia);
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // ACTUALIZAR ÍTEM
-  // -------------------------------------------
+  // -----------------------------
   function actualizarItem(index, campo, valor) {
     const copia = [...items];
     let item = { ...copia[index] };
@@ -91,7 +110,6 @@ export default function CrearLicitacion() {
     item[campo] = valor;
 
     let prod = null;
-
     if (campo === "sku") prod = productos.find((p) => p.sku === valor);
     if (campo === "producto") prod = productos.find((p) => p.nombre === valor);
 
@@ -107,24 +125,24 @@ export default function CrearLicitacion() {
 
     const cant = Number(item.cantidad || 0);
     const precioActual = Number(item.precio || 0);
-    item.total = redondear(cant * precioActual * 1.19);
+    item.total = redondear(cant * precioActual);
 
     copia[index] = item;
     setItems(copia);
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // TOGGLE OBSERVACIÓN
-  // -------------------------------------------
+  // -----------------------------
   function toggleObservacion(index) {
     const copia = [...items];
     copia[index].mostrarObs = !copia[index].mostrarObs;
     setItems(copia);
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // AGREGAR ÍTEM
-  // -------------------------------------------
+  // -----------------------------
   function agregarItem() {
     setItems([
       ...items,
@@ -142,21 +160,29 @@ export default function CrearLicitacion() {
     ]);
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // ELIMINAR ÍTEM
-  // -------------------------------------------
+  // -----------------------------
   function eliminarItem(index) {
+    if (items.length === 1) return;
     const copia = [...items];
     copia.splice(index, 1);
     setItems(copia);
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // RESUMEN
-  // -------------------------------------------
-  const totalConIVA = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-  const totalSinIVA = Math.round(totalConIVA / 1.19);
-  const totalIVA = totalConIVA - totalSinIVA;
+  // -----------------------------
+  const total = items.reduce(
+    (acc, it) => acc + Number(it.total || 0),
+    0
+  );
+
+  const totalIVA = Math.round(total * 0.19);
+  const totalNeto = total - totalIVA;
+
+  const totalConIVA = total;
+  const totalSinIVA = totalNeto;
 
   let porcentajePresupuesto = 0;
   if (monto && Number(monto) > 0) {
@@ -164,7 +190,6 @@ export default function CrearLicitacion() {
   }
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
-
   if (porcentajePresupuesto > 0 && porcentajePresupuesto <= 80) {
     colorPresupuesto = "text-green-700 bg-green-100 border-green-300";
   } else if (porcentajePresupuesto > 80 && porcentajePresupuesto <= 100) {
@@ -173,21 +198,22 @@ export default function CrearLicitacion() {
     colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
   }
 
-  // -------------------------------------------
+  // -----------------------------
   // GUARDAR LICITACIÓN
-  // -------------------------------------------
+  // -----------------------------
   async function guardarLicitacion() {
     setToast(null);
 
     const errores = [];
     if (!idLicitacionInput) errores.push("ID Licitación");
     if (!nombre) errores.push("Nombre de Licitación");
+    if (!fechaHoraCierre) errores.push("Fecha y Hora de Cierre");
+    if (!monto) errores.push("Monto");
+
     if (!rutEntidad) errores.push("RUT Entidad");
     if (!nombreEntidad) errores.push("Nombre Entidad");
     if (!departamento) errores.push("Departamento");
-    if (!fechaHoraCierre) errores.push("Fecha y Hora de Cierre");
     if (!municipalidad) errores.push("Municipalidad");
-    if (!monto) errores.push("Monto");
 
     if (errores.length > 0) {
       setToast({
@@ -206,14 +232,24 @@ export default function CrearLicitacion() {
         {
           id_licitacion: idLicitacionInput,
           nombre,
+
+          fecha_hora_cierre: fechaHoraCierre,
+          monto: Number(monto),
+          lista_precios: Number(listado),
+
           rut_entidad: rutEntidad,
           nombre_entidad: nombreEntidad,
           departamento,
-          fecha_hora_cierre: fechaHoraCierre,
           municipalidad,
-          monto: Number(monto),
+
+          direccion,
+          ciudad,
+          contacto,
+          email,
+          telefono,
+          condicion_venta: condVenta,
+
           fecha: fechaHoy,
-          lista_precios: Number(listado),
           creado_por: user.email,
           estado: "En espera",
 
@@ -249,58 +285,74 @@ export default function CrearLicitacion() {
       ]);
     }
 
+    // PDF
+    await generarPDFcotizacion({
+      numero_licitacion: idLicitacion,
+      fecha_emision: fechaHoy,
+
+      nombre_entidad: nombreEntidad,
+      rut_entidad: rutEntidad,
+      direccion,
+      ciudad,
+      contacto,
+      email,
+      telefono,
+      condicion_venta: condVenta,
+
+      items_tabla: items
+        .map((it) => {
+          const filaPrincipal = `
+            <tr>
+              <td>${it.sku}</td>
+              <td>${it.producto}</td>
+              <td>${it.formato}</td>
+              <td>${it.cantidad}</td>
+              <td>$ ${it.precio}</td>
+              <td>$ ${it.total}</td>
+            </tr>
+          `;
+
+          const filaObs = it.observacion
+            ? `
+              <tr>
+                <td></td>
+                <td colspan="5" style="font-style: italic; color: #444;">
+                  Observación: ${it.observacion}
+                </td>
+              </tr>
+            `
+            : "";
+
+          return filaPrincipal + filaObs;
+        })
+        .join(""),
+
+      afecto: totalSinIVA,
+      iva: totalIVA,
+      total_con_iva: totalConIVA,
+    });
+
     setToast({
       type: "success",
       message: `La licitación "${nombre}" fue creada exitosamente.`,
-
-
-      
     });
-
-
-// 🔥 GENERAR PDF AUTOMÁTICAMENTE
-  // ---------------------------------------
-  await generarPDFcotizacion({
-    numero_licitacion: idLicitacion, // <-- ID REAL
-    fecha_emision: fechaHoy,
-    nombre_entidad: nombreEntidad,
-    rut_entidad: rutEntidad,
-    items_tabla: items
-      .map(
-        (it) => `
-        <tr>
-          <td>${it.sku}</td>
-          <td>${it.producto}</td>
-          <td>${it.cantidad}</td>
-          <td>$ ${it.precio}</td>
-          <td>0%</td>
-          <td>$ ${it.total}</td>
-        </tr>
-      `
-      )
-      .join(""),
-    descuento_total: 0,
-    afecto: totalSinIVA,
-    iva: totalIVA,
-    total_con_iva: totalConIVA
-  });
-
-
-
-
-
-
 
     // RESET
     setIdLicitacionInput("");
     setNombre("");
+    setFechaHoraCierre("");
+    setMonto("");
+    setListado("1");
     setRutEntidad("");
     setNombreEntidad("");
     setDepartamento("");
-    setFechaHoraCierre("");
     setMunicipalidad("");
-    setMonto("");
-    setListado("1");
+    setDireccion("");
+    setCiudad("");
+    setContacto("");
+    setEmail("");
+    setTelefono("");
+    setCondVenta("");
 
     setItems([
       {
@@ -317,48 +369,9 @@ export default function CrearLicitacion() {
     ]);
   }
 
-
-// FUNCIÓN EXPORTAR PDF
-async function exportarPDF() {
-  if (!idLicitacionInput) {
-    setToast({ type: "error", message: "Debe existir ID de Licitación" });
-    return;
-  }
-
-  const fechaEmision = new Date().toISOString().slice(0, 10);
-
- await generarPDFcotizacion({
-    numero_licitacion: idLicitacionInput,
-    fecha_emision: new Date().toISOString().slice(0, 10),
-    nombre_entidad: nombreEntidad,
-    rut_entidad: rutEntidad,
-    items_tabla: items.map(it => `
-        <tr>
-            <td>${it.sku}</td>
-            <td>${it.producto}</td>
-            <td>${it.cantidad}</td>
-            <td>$ ${it.precio}</td>
-            <td>0%</td>
-            <td>$ ${it.total}</td>
-        </tr>
-    `).join(""),
-    descuento_total: 0,
-    afecto: totalSinIVA,
-    iva: totalIVA,
-    total_con_iva: totalConIVA,
-});
-
-
-
-}
-
-
-
-
-
-  // -------------------------------------------
-  // OPCIONES SELECT
-  // -------------------------------------------
+  // -----------------------------
+  // SELECT STYLES
+  // -----------------------------
   const opcionesSKU = productos.map((p) => ({ value: p.sku, label: p.sku }));
   const opcionesProducto = productos.map((p) => ({
     value: p.nombre,
@@ -371,30 +384,37 @@ async function exportarPDF() {
       minHeight: "40px",
       fontSize: "0.875rem",
     }),
-    menu: (base) => ({
-      ...base,
-      zIndex: 9999,
-    }),
+    menuPortal: (base) => ({ ...base, zIndex: 99999 }),
   };
 
-  // -------------------------------------------
+  // -----------------------------
   // UI
-  // -------------------------------------------
+  // -----------------------------
   return (
     <div className="w-full max-w-7xl mx-auto p-8">
       {toast && (
-        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
 
-      <h1 className="text-3xl font-semibold text-gray-900 mb-8">Crear Licitación</h1>
+      <h1 className="text-3xl font-semibold text-gray-900 mb-8">
+        Crear Licitación
+      </h1>
 
-      {/* CABECERA */}
+      {/* SECCIÓN DATOS LICITACIÓN */}
+      <h2 className="text-xl font-semibold text-gray-800 mb-3">
+        Datos de la Licitación
+      </h2>
+
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* CAMPOS CABECERA */}
-          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ID Licitación *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ID Licitación *
+            </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={idLicitacionInput}
@@ -403,7 +423,9 @@ async function exportarPDF() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de Licitación *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre Licitación *
+            </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={nombre}
@@ -412,34 +434,9 @@ async function exportarPDF() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">RUT Entidad *</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={rutEntidad}
-              onChange={(e) => setRutEntidad(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Entidad *</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={nombreEntidad}
-              onChange={(e) => setNombreEntidad(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Departamento *</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={departamento}
-              onChange={(e) => setDepartamento(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora de Cierre *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha y Hora de Cierre *
+            </label>
             <input
               type="datetime-local"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -449,16 +446,9 @@ async function exportarPDF() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Municipalidad *</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={municipalidad}
-              onChange={(e) => setMunicipalidad(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Monto Presupuesto *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Monto Presupuesto *
+            </label>
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -468,7 +458,9 @@ async function exportarPDF() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lista de Precios *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Lista de Precios *
+            </label>
             <select
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={listado}
@@ -483,146 +475,303 @@ async function exportarPDF() {
               <option value="4">Lista 4</option>
             </select>
           </div>
-
         </div>
       </div>
 
+      {/* SECCIÓN DATOS ENTIDAD */}
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-xl font-semibold text-gray-800">
+          Datos de la Entidad
+        </h2>
 
+        <button
+          className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
+          onClick={() => setMostrarEntidad(!mostrarEntidad)}
+        >
+          {mostrarEntidad ? "Ocultar ▲" : "Mostrar ▼"}
+        </button>
+      </div>
 
-
-
-
-
-<div className="space-y-6">
-  {items.map((it, index) => (
-    <div
-      key={index}
-      className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-18 gap-4 items-end">
-
-        {/* SKU */}
-        <div className="md:col-span-2">
-          <label className="block text-xs text-gray-600 mb-1">SKU</label>
-          <Select
-            options={opcionesSKU}
-            styles={customStyles}
-            placeholder="Buscar SKU..."
-            value={opcionesSKU.find((o) => o.value === it.sku) || null}
-            onChange={(op) => actualizarItem(index, "sku", op ? op.value : "")}
-          />
-        </div>
-
-        {/* PRODUCTO */}
-        <div className="md:col-span-4">
-          <label className="block text-xs text-gray-600 mb-1">Producto</label>
-          <Select
-            options={opcionesProducto}
-            styles={customStyles}
-            placeholder="Buscar producto..."
-            value={opcionesProducto.find((o) => o.value === it.producto) || null}
-            onChange={(op) => actualizarItem(index, "producto", op ? op.value : "")}
-          />
-        </div>
-
-        {/* CATEGORÍA */}
-        <div className="md:col-span-2">
-          <label className="block text-xs text-gray-600 mb-1">Categoría</label>
-          <input
-            className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-sm"
-            value={it.categoria}
-            readOnly
-          />
-        </div>
-
-        {/* FORMATO */}
-        <div className="md:col-span-2">
-          <label className="block text-xs text-gray-600 mb-1">Formato</label>
-          <input
-            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-            value={it.formato}
-            onChange={(e) => actualizarItem(index, "formato", e.target.value)}
-          />
-        </div>
-
-        {/* CANTIDAD (AGRANDADO) */}
-        <div className="md:col-span-2">
-          <label className="block text-xs text-gray-600 mb-1">Cantidad</label>
-          <input
-            type="number"
-            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-            value={it.cantidad}
-            onChange={(e) => actualizarItem(index, "cantidad", e.target.value)}
-          />
-        </div>
-
-        {/* PRECIO */}
-        <div className="md:col-span-2">
-          <label className="block text-xs text-gray-600 mb-1">Precio Unitario</label>
-          <input
-            type="number"
-            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-            value={it.precio}
-            onChange={(e) => actualizarItem(index, "precio", e.target.value)}
-          />
-        </div>
-
-        {/* TOTAL */}
-        <div className="md:col-span-1">
-          <label className="block text-xs text-gray-600 mb-1">Total (IVA)</label>
-          <div className="h-10 flex items-center font-semibold">
-            ${Number(it.total).toLocaleString("es-CL")}
-          </div>
-        </div>
-
-        {/* OBSERVACIÓN CUANDO mostrarObs = true */}
-        {it.mostrarObs ? (
-          <div className="md:col-span-3">
-            <label className="block text-xs text-gray-600 mb-1">Obs.</label>
+      <div
+        className={`bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10 transition-all duration-300 overflow-hidden ${
+          mostrarEntidad ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              RUT *
+            </label>
             <input
-              className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-              value={it.observacion}
-              onChange={(e) =>
-                actualizarItem(index, "observacion", e.target.value)
-              }
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={rutEntidad}
+              onChange={(e) => setRutEntidad(e.target.value)}
             />
           </div>
-        ) : (
-          <div className="md:col-span-1"></div>
-        )}
 
-        {/* BOTÓN + / - */}
-        <div className="md:col-span-1 flex justify-center">
-          <button
-            onClick={() => toggleObservacion(index)}
-            className="cursor-pointer bg-gray-300 rounded-md px-3 py-1 text-sm shadow hover:bg-gray-400"
-          >
-            {it.mostrarObs ? "–" : "+"}
-          </button>
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre Entidad *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={nombreEntidad}
+              onChange={(e) => setNombreEntidad(e.target.value)}
+            />
+          </div>
 
-        {/* ELIMINAR */}
-        <div className="md:col-span-1 flex justify-center">
-          <button
-            onClick={() => eliminarItem(index)}
-            className="cursor-pointer bg-red-600 text-white px-3 py-1 rounded-md text-sm shadow hover:bg-red-700"
-          >
-            Eliminar
-          </button>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Departamento *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={departamento}
+              onChange={(e) => setDepartamento(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Municipalidad *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={municipalidad}
+              onChange={(e) => setMunicipalidad(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Dirección *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ciudad *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={ciudad}
+              onChange={(e) => setCiudad(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contacto *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={contacto}
+              onChange={(e) => setContacto(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email *
+            </label>
+            <input
+              type="email"
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+            />
+          </div>
+
+          <div className="md:col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cond. Venta *
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={condVenta}
+              onChange={(e) => setCondVenta(e.target.value)}
+            />
+          </div>
         </div>
       </div>
-    </div>
-  ))}
-</div>
 
+      {/* ITEMS */}
+      <h2 className="text-xl font-semibold text-gray-800 mb-3">Ítems</h2>
 
+      <div className="space-y-6 max-h-[480px] overflow-y-auto overflow-x-auto pr-2">
+        {items.map((it, index) => (
+          <div
+            key={index}
+            className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3"
+          >
+            {/* PRIMERA FILA */}
+            <div className="grid grid-cols-1 md:grid-cols-18 gap-4 items-end">
+              {/* SKU */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  SKU
+                </label>
+                <Select
+                  options={opcionesSKU}
+                  styles={customStyles}
+                  menuPortalTarget={document.body}
+                  value={
+                    opcionesSKU.find((o) => o.value === it.sku) || null
+                  }
+                  onChange={(op) =>
+                    actualizarItem(index, "sku", op ? op.value : "")
+                  }
+                />
+              </div>
 
+              {/* PRODUCTO */}
+              <div className="md:col-span-4">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Producto
+                </label>
+                <Select
+                  options={opcionesProducto}
+                  styles={customStyles}
+                  menuPortalTarget={document.body}
+                  value={
+                    opcionesProducto.find((o) => o.value === it.producto) ||
+                    null
+                  }
+                  onChange={(op) =>
+                    actualizarItem(
+                      index,
+                      "producto",
+                      op ? op.value : ""
+                    )
+                  }
+                />
+              </div>
 
+              {/* CATEGORÍA */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Categoría
+                </label>
+                <input
+                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-sm"
+                  value={it.categoria}
+                  readOnly
+                />
+              </div>
 
+              {/* FORMATO */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Formato
+                </label>
+                <input
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                  value={it.formato}
+                  onChange={(e) =>
+                    actualizarItem(index, "formato", e.target.value)
+                  }
+                />
+              </div>
 
+              {/* CANTIDAD */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Cantidad
+                </label>
+                <input
+                  type="number"
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                  value={it.cantidad}
+                  onChange={(e) =>
+                    actualizarItem(index, "cantidad", e.target.value)
+                  }
+                />
+              </div>
 
+              {/* PRECIO */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Precio Unitario
+                </label>
+                <input
+                  type="number"
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                  value={it.precio}
+                  onChange={(e) =>
+                    actualizarItem(index, "precio", e.target.value)
+                  }
+                />
+              </div>
 
+              {/* TOTAL */}
+              <div className="md:col-span-1">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Total
+                </label>
+                <div className="h-10 flex items-center font-semibold">
+                  ${Number(it.total).toLocaleString("es-CL")}
+                </div>
+              </div>
 
+              {/* BOTÓN OBS */}
+              <div className="md:col-span-1 flex justify-center">
+                <button
+                  onClick={() => toggleObservacion(index)}
+                  className="cursor-pointer bg-gray-300 rounded-md px-3 py-1 text-sm shadow hover:bg-gray-400"
+                >
+                  {it.mostrarObs ? "–" : "+"}
+                </button>
+              </div>
+
+              {/* BOTÓN ELIMINAR */}
+              <div className="md:col-span-1 flex justify-center">
+                {items.length > 1 && (
+                  <button
+                    onClick={() => eliminarItem(index)}
+                    className="cursor-pointer bg-red-600 text-white px-3 py-1 rounded-md text-sm shadow hover:bg-red-700"
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* SEGUNDA FILA → OBSERVACIÓN */}
+            {it.mostrarObs && (
+              <div className="grid grid-cols-1 md:grid-cols-18 transition-all">
+                <div className="md:col-span-10">
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Observación
+                  </label>
+                  <input
+                    className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                    value={it.observacion}
+                    onChange={(e) =>
+                      actualizarItem(index, "observacion", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* RESUMEN */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
@@ -631,8 +780,7 @@ async function exportarPDF() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-
-              Total Neto
+              Neto
             </label>
             <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
               ${totalSinIVA.toLocaleString("es-CL")}
@@ -640,25 +788,33 @@ async function exportarPDF() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">IVA 19%</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              IVA 19%
+            </label>
             <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
               ${totalIVA.toLocaleString("es-CL")}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Bruto</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Total
+            </label>
             <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
               ${totalConIVA.toLocaleString("es-CL")}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">% Presupuesto</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              % Presupuesto
+            </label>
             <div
               className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
             >
-              {porcentajePresupuesto > 0 ? porcentajePresupuesto.toFixed(2) + "%" : "0%"}
+              {porcentajePresupuesto > 0
+                ? porcentajePresupuesto.toFixed(2) + "%"
+                : "0%"}
             </div>
           </div>
         </div>
@@ -679,10 +835,6 @@ async function exportarPDF() {
         >
           Guardar Licitación
         </button>
-
-
-
-
       </div>
     </div>
   );

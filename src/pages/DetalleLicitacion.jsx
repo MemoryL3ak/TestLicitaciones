@@ -2,17 +2,95 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, Link } from "react-router-dom";
 import Toast from "../components/Toast";
-import Select from "react-select";
+import Select, { components } from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
 
-/* ---------------------------------------------
-   FUNCIÓN DE REDONDEO
---------------------------------------------- */
+/* ============================================================
+   GENERALES
+============================================================ */
+
 function redondear(valor) {
   const entero = Math.floor(valor);
   const decimal = valor - entero;
   return decimal >= 0.5 ? entero + 1 : entero;
 }
+
+function formatear(valor) {
+  return Number(valor).toLocaleString("es-CL");
+}
+
+/* ============================================================
+   ESTILO SELECT (idéntico a CREACIÓN)
+============================================================ */
+
+const customStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "40px",
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+  input: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    color: "#333",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+  option: (base, state) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    background: state.isFocused ? "#1A73E8" : "white",
+    color: state.isFocused ? "white" : "#333",
+    cursor: "pointer",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+};
+
+/* ============================================================
+   TOOLTIP PARA PRODUCTO (igual a creación)
+============================================================ */
+
+const ProductoSingleValue = (props) => {
+  return (
+    <components.SingleValue
+      {...props}
+      onMouseEnter={(e) => {
+        const rect = e.target.getBoundingClientRect();
+        props.selectProps.setTooltip({
+          visible: true,
+          texto: props.data.label,
+          x: rect.left,
+          y: rect.bottom,
+        });
+      }}
+      onMouseLeave={() =>
+        props.selectProps.setTooltip((t) => ({ ...t, visible: false }))
+      }
+      style={{ fontSize: "13px", cursor: "default" }}
+    >
+      {props.children}
+    </components.SingleValue>
+  );
+};
+
+/* ============================================================
+   COMPONENTE PRINCIPAL
+============================================================ */
 
 export default function DetalleLicitacion() {
   const { id } = useParams();
@@ -23,28 +101,35 @@ export default function DetalleLicitacion() {
   const [items, setItems] = useState([]);
   const [toast, setToast] = useState(null);
 
-  /* ---------------------------------------------
-     CARGA INICIAL
---------------------------------------------- */
+  const [tooltip, setTooltip] = useState({
+    visible: false,
+    texto: "",
+    x: 0,
+    y: 0,
+  });
+
+  const [mostrarEntidad, setMostrarEntidad] = useState(true);
+
+  /* ============================================================
+     CARGA INICIAL (completa)
+  ============================================================ */
+
   useEffect(() => {
     async function cargar() {
       setLoading(true);
 
-      // LICITACIÓN
       const { data: lic } = await supabase
         .from("licitaciones")
         .select("*")
         .eq("id", id)
         .single();
 
-      // PRODUCTOS
       const { data: productosDB } = await supabase
         .from("productos")
         .select("*")
-        .order("id", { ascending: true })
+        .order("id")
         .limit(20000);
 
-      // ITEMS
       const { data: its } = await supabase
         .from("items_licitacion")
         .select("*")
@@ -53,7 +138,6 @@ export default function DetalleLicitacion() {
       setLicitacion(lic);
       setProductos(productosDB || []);
 
-      // Convertir ítems
       setItems(
         (its || []).map((i) => ({
           id_item: i.id,
@@ -65,7 +149,7 @@ export default function DetalleLicitacion() {
           precio: Number(i.valor_unitario),
           observacion: i.observacion || "",
           mostrarObs: i.observacion ? true : false,
-          total: redondear(Number(i.cantidad) * Number(i.valor_unitario) * 1.19),
+          total: redondear(Number(i.cantidad) * Number(i.valor_unitario)),
         }))
       );
 
@@ -75,9 +159,10 @@ export default function DetalleLicitacion() {
     cargar();
   }, [id]);
 
-  /* ---------------------------------------------
-     AGREGAR ÍTEM
---------------------------------------------- */
+  /* ============================================================
+     AGREGAR ITEM
+  ============================================================ */
+
   function agregarItem() {
     setItems([
       ...items,
@@ -87,7 +172,7 @@ export default function DetalleLicitacion() {
         producto: "",
         categoria: "",
         formato: "",
-        cantidad: 0,
+        cantidad: 1,
         precio: 0,
         observacion: "",
         mostrarObs: false,
@@ -96,30 +181,32 @@ export default function DetalleLicitacion() {
     ]);
   }
 
-  /* ---------------------------------------------
-     ELIMINAR ÍTEM
---------------------------------------------- */
-  async function eliminarItem(index) {
-    const target = items[index];
-    if (!confirm("¿Eliminar este ítem?")) return;
+  /* ============================================================
+     ELIMINAR ITEM
+  ============================================================ */
+async function eliminarItem(index) {
+  const target = items[index];
 
-    if (target.id_item) {
-      await supabase.from("items_licitacion").delete().eq("id", target.id_item);
-    }
-
-    const copia = [...items];
-    copia.splice(index, 1);
-    setItems(copia);
-
-    setToast({
-      type: "success",
-      message: "Ítem eliminado",
-    });
+  // Eliminar directamente sin confirmación
+  if (target.id_item) {
+    await supabase.from("items_licitacion").delete().eq("id", target.id_item);
   }
 
-  /* ---------------------------------------------
-     ACTUALIZAR ÍTEM
---------------------------------------------- */
+  const copia = [...items];
+  copia.splice(index, 1);
+  setItems(copia);
+
+  setToast({
+    type: "success",
+    message: "Ítem eliminado",
+  });
+}
+
+
+  /* ============================================================
+     ACTUALIZAR ITEM (idéntico a creación)
+  ============================================================ */
+
   function actualizarItem(index, campo, valor) {
     const copia = [...items];
     let item = { ...copia[index] };
@@ -127,7 +214,6 @@ export default function DetalleLicitacion() {
     item[campo] = valor;
 
     let prod = null;
-
     if (campo === "sku") prod = productos.find((p) => p.sku === valor);
     if (campo === "producto") prod = productos.find((p) => p.nombre === valor);
 
@@ -141,34 +227,43 @@ export default function DetalleLicitacion() {
       item.precio = Number(prod[llave] ?? 0);
     }
 
-    item.total = redondear(Number(item.cantidad) * Number(item.precio) * 1.19);
+    const cantidad = Math.max(1, Number(item.cantidad || 1));
+    item.total = redondear(cantidad * Number(item.precio || 0));
 
     copia[index] = item;
     setItems(copia);
   }
 
-  /* ---------------------------------------------
-     GUARDAR CAMBIOS
---------------------------------------------- */
+  /* ============================================================
+     GUARDAR CAMBIOS (alineado a creación)
+  ============================================================ */
+
   async function guardarCambios() {
     await supabase
       .from("licitaciones")
       .update({
         id_licitacion: licitacion.id_licitacion,
         nombre: licitacion.nombre,
+        fecha_hora_cierre: licitacion.fecha_hora_cierre,
+        monto: Number(licitacion.monto),
+        lista_precios: licitacion.lista_precios,
+
         rut_entidad: licitacion.rut_entidad,
         nombre_entidad: licitacion.nombre_entidad,
         departamento: licitacion.departamento,
-        fecha_hora_cierre: licitacion.fecha_hora_cierre,
         municipalidad: licitacion.municipalidad,
-        monto: Number(licitacion.monto),
-        lista_precios: licitacion.lista_precios,
-        estado: licitacion.estado,
+        direccion: licitacion.direccion,
+        ciudad: licitacion.ciudad,
+        contacto: licitacion.contacto,
+        email: licitacion.email,
+        telefono: licitacion.telefono,
+        condicion_venta: licitacion.condicion_venta,
       })
       .eq("id", id);
 
     for (const it of items) {
-      const total = redondear(Number(it.cantidad) * Number(it.precio) * 1.19);
+      const cantidad = Math.max(1, Number(it.cantidad));
+      const total = redondear(cantidad * Number(it.precio));
 
       if (it.id_item) {
         await supabase
@@ -178,7 +273,7 @@ export default function DetalleLicitacion() {
             producto: it.producto,
             categoria: it.categoria,
             formato: it.formato,
-            cantidad: Number(it.cantidad),
+            cantidad,
             valor_unitario: Number(it.precio),
             observacion: it.observacion,
             total,
@@ -192,7 +287,7 @@ export default function DetalleLicitacion() {
             producto: it.producto,
             categoria: it.categoria,
             formato: it.formato,
-            cantidad: Number(it.cantidad),
+            cantidad,
             valor_unitario: Number(it.precio),
             observacion: it.observacion,
             total,
@@ -203,92 +298,73 @@ export default function DetalleLicitacion() {
 
     setToast({
       type: "success",
-      message: "Cambios guardados con éxito",
+      message: "Cambios guardados correctamente",
     });
   }
 
-  /* ---------------------------------------------
-     EXPORTAR PDF
---------------------------------------------- */
+  /* ============================================================
+     PDF (idéntico a creación)
+  ============================================================ */
+
   async function exportarPDF() {
-  await generarPDFcotizacion({
-    numero_licitacion: id,  // ← ID REAL AUTOGENERADO
-    fecha_emision: new Date().toISOString().slice(0, 10),
-    nombre_entidad: licitacion.nombre_entidad,
-    rut_entidad: licitacion.rut_entidad,
+    const total = items.reduce((acc, it) => acc + Number(it.total), 0);
+    const totalNeto = Math.round(total / 1.19);
+    const totalIVA = total - totalNeto;
 
-    items_tabla: items
-      .map(
-        (it) => `
+    await generarPDFcotizacion({
+      numero_licitacion: licitacion.id_licitacion,
+      fecha_emision: new Date().toISOString().slice(0, 10),
+
+      nombre_entidad: licitacion.nombre_entidad,
+      rut_entidad: licitacion.rut_entidad,
+      direccion: licitacion.direccion,
+      ciudad: licitacion.ciudad,
+      contacto: licitacion.contacto,
+      email: licitacion.email,
+      telefono: licitacion.telefono,
+      condicion_venta: licitacion.condicion_venta,
+
+      items_tabla: items
+        .map((it) => {
+          const fila = `
             <tr>
-                <td>${it.sku}</td>
-                <td>${it.producto}</td>
-                <td>${it.cantidad}</td>
-                <td>$ ${it.precio}</td>
-                <td>0%</td>
-                <td>$ ${it.total}</td>
+              <td>${it.sku}</td>
+              <td>${it.producto}</td>
+              <td>${it.formato}</td>
+              <td>${it.cantidad}</td>
+              <td>$ ${formatear(it.precio)}</td>
+              <td>$ ${formatear(it.total)}</td>
             </tr>
-        `
-      )
-      .join(""),
+          `;
 
-    descuento_total: 0,
+          const filaObs = it.observacion
+            ? `
+            <tr>
+              <td></td>
+              <td colspan="5" style="font-style: italic; color: #444;">
+                Observación: ${it.observacion}
+              </td>
+            </tr>
+          `
+            : "";
 
-    afecto: Math.round(
-      items.reduce((acc, it) => acc + Number(it.total || 0), 0) / 1.19
-    ),
+          return fila + filaObs;
+        })
+        .join(""),
 
-    iva:
-      items.reduce((acc, it) => acc + Number(it.total || 0), 0) -
-      Math.round(
-        items.reduce((acc, it) => acc + Number(it.total || 0), 0) / 1.19
-      ),
+      afecto: formatear(totalNeto),
+      iva: formatear(totalIVA),
+      total_con_iva: formatear(total),
+    });
+  }
 
-    total_con_iva: items.reduce((acc, it) => acc + Number(it.total || 0), 0),
-  });
-}
-
-
-
-
-
-
-  
-
-  /* ---------------------------------------------
-     OPCIONES SELECT
---------------------------------------------- */
-  const opcionesSKU = productos.map((p) => ({
-    value: p.sku,
-    label: p.sku,
-  }));
-
-  const opcionesProducto = productos.map((p) => ({
-    value: p.nombre,
-    label: p.nombre,
-  }));
-
-  const customStyles = {
-    control: (base) => ({
-      ...base,
-      minHeight: "40px",
-      fontSize: "0.875rem",
-    }),
-    menu: (base) => ({
-      ...base,
-      zIndex: 9999,
-    }),
-  };
-
-  /* ---------------------------------------------
+  /* ============================================================
      UI
---------------------------------------------- */
+  ============================================================ */
+
   if (loading) return <div className="p-10">Cargando...</div>;
 
-  /* ---------------------------------------------
-     CALCULO RESUMEN
---------------------------------------------- */
-  const totalBruto = items.reduce((acc, it) => acc + it.total, 0);
+  const totalBruto = items.reduce((acc, it) => acc + Number(it.total), 0);
   const totalNeto = Math.round(totalBruto / 1.19);
   const totalIVA = totalBruto - totalNeto;
 
@@ -296,19 +372,42 @@ export default function DetalleLicitacion() {
     ? (totalBruto / licitacion.monto) * 100
     : 0;
 
-  let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
+  let colorPresupuesto =
+    "text-gray-700 bg-gray-100 border-gray-300";
   if (porcentajePresupuesto <= 80)
     colorPresupuesto = "text-green-700 bg-green-100 border-green-300";
   else if (porcentajePresupuesto <= 100)
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
-  else
-    colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
+  else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
-  /* ---------------------------------------------
-     RETURN
---------------------------------------------- */
+  /* ============================================================
+     RENDER
+  ============================================================ */
+
   return (
     <div className="mx-auto max-w-7xl p-8">
+      {/* Tooltip */}
+      {tooltip.visible && (
+        <div
+          style={{
+            position: "fixed",
+            top: tooltip.y + 10,
+            left: tooltip.x,
+            padding: "8px 12px",
+            background: "linear-gradient(135deg, #1e3a8a, #2563eb)",
+            color: "white",
+            fontSize: "12px",
+            borderRadius: "6px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            whiteSpace: "nowrap",
+            zIndex: 99999,
+            pointerEvents: "none",
+          }}
+        >
+          {tooltip.texto}
+        </div>
+      )}
+
       {toast && (
         <Toast
           type={toast.type}
@@ -321,27 +420,37 @@ export default function DetalleLicitacion() {
         Detalle de Licitación #{id}
       </h1>
 
-      <Link to="/listar" className="text-blue-600 hover:text-blue-800 mb-6 block">
+      <Link
+        to="/listar"
+        className="text-blue-600 hover:text-blue-800 mb-6 block"
+      >
         ← Volver al listado
       </Link>
 
-      {/* CABECERA */}
+      {/* ========== DATOS LICITACIÓN ========== */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mb-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Datos de la Licitación
+        </h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
           <div>
-            <label className="text-sm font-medium">ID Licitación</label>
+            <label className="text-sm font-medium">ID Licitación *</label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={licitacion.id_licitacion}
               onChange={(e) =>
-                setLicitacion({ ...licitacion, id_licitacion: e.target.value })
+                setLicitacion({
+                  ...licitacion,
+                  id_licitacion: e.target.value,
+                })
               }
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium">Nombre de Licitación</label>
+            <label className="text-sm font-medium">Nombre Licitación *</label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={licitacion.nombre}
@@ -352,43 +461,9 @@ export default function DetalleLicitacion() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">RUT Entidad</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={licitacion.rut_entidad}
-              onChange={(e) =>
-                setLicitacion({ ...licitacion, rut_entidad: e.target.value })
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Nombre Entidad</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={licitacion.nombre_entidad}
-              onChange={(e) =>
-                setLicitacion({
-                  ...licitacion,
-                  nombre_entidad: e.target.value,
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Departamento</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={licitacion.departamento || ""}
-              onChange={(e) =>
-                setLicitacion({ ...licitacion, departamento: e.target.value })
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Fecha y Hora de Cierre</label>
+            <label className="text-sm font-medium">
+              Fecha y Hora de Cierre *
+            </label>
             <input
               type="datetime-local"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -403,25 +478,11 @@ export default function DetalleLicitacion() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">Municipalidad</label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={licitacion.municipalidad || ""}
-              onChange={(e) =>
-                setLicitacion({
-                  ...licitacion,
-                  municipalidad: e.target.value,
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Monto</label>
+            <label className="text-sm font-medium">Monto Presupuesto *</label>
             <input
               type="number"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={licitacion.monto || ""}
+              value={licitacion.monto}
               onChange={(e) =>
                 setLicitacion({ ...licitacion, monto: e.target.value })
               }
@@ -429,7 +490,7 @@ export default function DetalleLicitacion() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">Lista de Precios</label>
+            <label className="text-sm font-medium">Lista de Precios *</label>
             <select
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={licitacion.lista_precios}
@@ -449,10 +510,143 @@ export default function DetalleLicitacion() {
         </div>
       </div>
 
-      {/* ÍTEMS (IDÉNTICOS A CREACIÓN) */}
+      {/* ========== DATOS ENTIDAD ========== */}
+
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mb-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Datos de la Entidad
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          <div>
+            <label className="text-sm font-medium">RUT *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.rut_entidad || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, rut_entidad: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Nombre Entidad *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.nombre_entidad || ""}
+              onChange={(e) =>
+                setLicitacion({
+                  ...licitacion,
+                  nombre_entidad: e.target.value,
+                })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Departamento *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.departamento || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, departamento: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Municipalidad *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.municipalidad || ""}
+              onChange={(e) =>
+                setLicitacion({
+                  ...licitacion,
+                  municipalidad: e.target.value,
+                })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Dirección *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.direccion || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, direccion: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Ciudad *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.ciudad || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, ciudad: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Contacto *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.contacto || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, contacto: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Email *</label>
+            <input
+              type="email"
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.email || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, email: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Teléfono *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.telefono || ""}
+              onChange={(e) =>
+                setLicitacion({ ...licitacion, telefono: e.target.value })
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Condiciones de Venta *</label>
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={licitacion.condicion_venta || ""}
+              onChange={(e) =>
+                setLicitacion({
+                  ...licitacion,
+                  condicion_venta: e.target.value,
+                })
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ========== ÍTEMS ========== */}
+
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Ítems</h2>
 
-<div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
+      <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
+
         {items.map((it, index) => (
           <div
             key={index}
@@ -464,9 +658,14 @@ export default function DetalleLicitacion() {
               <div className="md:col-span-2">
                 <label className="block text-xs text-gray-600 mb-1">SKU</label>
                 <Select
-                  options={opcionesSKU}
+                  options={productos.map((p) => ({ value: p.sku, label: p.sku }))}
                   styles={customStyles}
-                  value={opcionesSKU.find((o) => o.value === it.sku) || null}
+                  isSearchable
+                  value={
+                    productos
+                      .map((p) => ({ value: p.sku, label: p.sku }))
+                      .find((o) => o.value === it.sku) || null
+                  }
                   onChange={(op) =>
                     actualizarItem(index, "sku", op ? op.value : "")
                   }
@@ -478,10 +677,21 @@ export default function DetalleLicitacion() {
                 <label className="block text-xs text-gray-600 mb-1">
                   Producto
                 </label>
+
                 <Select
-                  options={opcionesProducto}
+                  options={productos.map((p) => ({
+                    value: p.nombre,
+                    label: p.nombre,
+                  }))}
                   styles={customStyles}
-                  value={opcionesProducto.find((o) => o.value === it.producto) || null}
+                  isSearchable
+                  components={{ SingleValue: ProductoSingleValue }}
+                  selectProps={{ setTooltip }}
+                  value={
+                    productos
+                      .map((p) => ({ value: p.nombre, label: p.nombre }))
+                      .find((o) => o.value === it.producto) || null
+                  }
                   onChange={(op) =>
                     actualizarItem(index, "producto", op ? op.value : "")
                   }
@@ -496,7 +706,7 @@ export default function DetalleLicitacion() {
                 <input
                   readOnly
                   value={it.categoria}
-                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-[13px]"
                 />
               </div>
 
@@ -521,6 +731,7 @@ export default function DetalleLicitacion() {
                 </label>
                 <input
                   type="number"
+                  min={1}
                   value={it.cantidad}
                   onChange={(e) =>
                     actualizarItem(index, "cantidad", e.target.value)
@@ -552,23 +763,7 @@ export default function DetalleLicitacion() {
                 </div>
               </div>
 
-              {/* OBSERVACIÓN */}
-              {it.mostrarObs ? (
-                <div className="md:col-span-3">
-                  <label className="block text-xs text-gray-600 mb-1">Obs.</label>
-                  <input
-                    className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-                    value={it.observacion}
-                    onChange={(e) =>
-                      actualizarItem(index, "observacion", e.target.value)
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="md:col-span-1"></div>
-              )}
-
-              {/* BOTÓN + */}
+              {/* MOSTRAR OBS */}
               <div className="md:col-span-1 flex justify-center">
                 <button
                   className="cursor-pointer bg-gray-300 rounded-md px-3 py-1 text-sm shadow hover:bg-gray-400"
@@ -592,15 +787,33 @@ export default function DetalleLicitacion() {
                 </button>
               </div>
             </div>
+
+            {/* OBSERVACIÓN */}
+            {it.mostrarObs && (
+              <div className="mt-3">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Observación
+                </label>
+                <input
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                  value={it.observacion}
+                  onChange={(e) =>
+                    actualizarItem(index, "observacion", e.target.value)
+                  }
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* RESUMEN */}
+      {/* ========== RESUMEN ========== */}
+
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Total Neto
@@ -641,7 +854,8 @@ export default function DetalleLicitacion() {
         </div>
       </div>
 
-      {/* BOTONES */}
+      {/* ========== BOTONES ========== */}
+
       <div className="flex gap-4 mt-6">
         <button
           onClick={agregarItem}
@@ -664,7 +878,6 @@ export default function DetalleLicitacion() {
           Generar PDF
         </button>
       </div>
-
     </div>
   );
 }

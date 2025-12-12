@@ -1,41 +1,119 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
-import Select from "react-select";
+import Select, { components } from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
 
-// -------------------------------------------
-// REDONDEO
-// -------------------------------------------
+/* ============================================================
+   TOOLTIP SOLO PARA PRODUCTO (NO TOCA EL INPUT DEL SELECT)
+============================================================ */
+const ProductoSingleValue = (props) => {
+  return (
+    <components.SingleValue
+      {...props}
+      onMouseEnter={(e) => {
+        const rect = e.target.getBoundingClientRect();
+        props.selectProps.setTooltip({
+          visible: true,
+          texto: props.data.label,
+          x: rect.left,
+          y: rect.bottom,
+        });
+      }}
+      onMouseLeave={() =>
+        props.selectProps.setTooltip((t) => ({ ...t, visible: false }))
+      }
+      style={{ fontSize: "13px", cursor: "default" }}
+    >
+      {props.children}
+    </components.SingleValue>
+  );
+};
+
+/* ============================================================
+   FORMATEO DE VALORES
+============================================================ */
 function redondear(valor) {
   const entero = Math.floor(valor);
   const decimal = valor - entero;
   return decimal >= 0.5 ? entero + 1 : entero;
 }
 
+function formatear(valor) {
+  return Number(valor).toLocaleString("es-CL");
+}
+
+/* ============================================================
+   ESTILOS DEL SELECT
+============================================================ */
+const customStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "40px",
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+  input: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    color: "#333",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+option: (base, state) => ({
+  ...base,
+  fontSize: "13px",
+  fontFamily: "inherit",
+  background: state.isFocused
+    ? "#1A73E8"  // azul profundo tipo Tailwind blue-900
+    : "white",
+  color: state.isFocused ? "white" : "#333",
+  cursor: "pointer",
+}),
+
+
+
+
+  placeholder: (base) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+  }),
+};
+
+/* ============================================================
+   COMPONENTE PRINCIPAL
+============================================================ */
+
 export default function CrearLicitacion() {
-  // -----------------------------
-  // UI: COLAPSAR ENTIDAD
-  // -----------------------------
+  const [tooltip, setTooltip] = useState({
+    visible: false,
+    texto: "",
+    x: 0,
+    y: 0,
+  });
+
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
-  // -----------------------------
-  // DATOS LICITACIÓN
-  // -----------------------------
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
   const [nombre, setNombre] = useState("");
   const [fechaHoraCierre, setFechaHoraCierre] = useState("");
   const [monto, setMonto] = useState("");
   const [listado, setListado] = useState("1");
 
-  // -----------------------------
-  // DATOS ENTIDAD
-  // -----------------------------
   const [rutEntidad, setRutEntidad] = useState("");
   const [nombreEntidad, setNombreEntidad] = useState("");
   const [departamento, setDepartamento] = useState("");
   const [municipalidad, setMunicipalidad] = useState("");
-
   const [direccion, setDireccion] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [contacto, setContacto] = useState("");
@@ -46,9 +124,6 @@ export default function CrearLicitacion() {
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
 
-  // -----------------------------
-  // ITEMS
-  // -----------------------------
   const [items, setItems] = useState([
     {
       sku: "",
@@ -63,9 +138,9 @@ export default function CrearLicitacion() {
     },
   ]);
 
-  // -----------------------------
-  // CARGAR PRODUCTOS
-  // -----------------------------
+  /* ============================================================
+     CARGA DE PRODUCTOS
+  ============================================================ */
   useEffect(() => {
     async function cargar() {
       const { data } = await supabase
@@ -79,9 +154,9 @@ export default function CrearLicitacion() {
     cargar();
   }, []);
 
-  // -----------------------------
-  // CAMBIO LISTA
-  // -----------------------------
+  /* ============================================================
+     CAMBIO DE LISTA DE PRECIOS
+  ============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((it) => {
       if (!it.sku) return it;
@@ -90,6 +165,7 @@ export default function CrearLicitacion() {
       if (!prod) return it;
 
       const precio = Number(prod[`lista${nuevaLista}`] ?? 0);
+
       return {
         ...it,
         precio,
@@ -100,9 +176,9 @@ export default function CrearLicitacion() {
     setItems(copia);
   }
 
-  // -----------------------------
-  // ACTUALIZAR ÍTEM
-  // -----------------------------
+  /* ============================================================
+     ACTUALIZAR ÍTEM
+  ============================================================ */
   function actualizarItem(index, campo, valor) {
     const copia = [...items];
     let item = { ...copia[index] };
@@ -118,31 +194,25 @@ export default function CrearLicitacion() {
       item.producto = prod.nombre;
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
-
-      const precio = Number(prod[`lista${listado}`] ?? 0);
-      item.precio = precio;
+      item.precio = Number(prod[`lista${listado}`] ?? 0);
     }
 
-    const cant = Number(item.cantidad || 0);
-    const precioActual = Number(item.precio || 0);
-    item.total = redondear(cant * precioActual);
+    const cantidad = Math.max(1, Number(item.cantidad || 1));
+    item.total = redondear(cantidad * Number(item.precio || 0));
 
     copia[index] = item;
     setItems(copia);
   }
 
-  // -----------------------------
-  // TOGGLE OBSERVACIÓN
-  // -----------------------------
+  /* ============================================================
+     OBSERVACIÓN / AGREGAR / ELIMINAR
+  ============================================================ */
   function toggleObservacion(index) {
     const copia = [...items];
     copia[index].mostrarObs = !copia[index].mostrarObs;
     setItems(copia);
   }
 
-  // -----------------------------
-  // AGREGAR ÍTEM
-  // -----------------------------
   function agregarItem() {
     setItems([
       ...items,
@@ -160,9 +230,6 @@ export default function CrearLicitacion() {
     ]);
   }
 
-  // -----------------------------
-  // ELIMINAR ÍTEM
-  // -----------------------------
   function eliminarItem(index) {
     if (items.length === 1) return;
     const copia = [...items];
@@ -170,46 +237,38 @@ export default function CrearLicitacion() {
     setItems(copia);
   }
 
-  // -----------------------------
-  // RESUMEN
-  // -----------------------------
-  const total = items.reduce(
-    (acc, it) => acc + Number(it.total || 0),
-    0
-  );
-
+  /* ============================================================
+     RESUMEN
+  ============================================================ */
+  const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
   const totalIVA = Math.round(total * 0.19);
   const totalNeto = total - totalIVA;
 
   const totalConIVA = total;
-  const totalSinIVA = totalNeto;
 
   let porcentajePresupuesto = 0;
-  if (monto && Number(monto) > 0) {
+  if (monto > 0) {
     porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
   }
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
-  if (porcentajePresupuesto > 0 && porcentajePresupuesto <= 80) {
+  if (porcentajePresupuesto <= 80)
     colorPresupuesto = "text-green-700 bg-green-100 border-green-300";
-  } else if (porcentajePresupuesto > 80 && porcentajePresupuesto <= 100) {
+  else if (porcentajePresupuesto <= 100)
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
-  } else if (porcentajePresupuesto > 100) {
-    colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
-  }
+  else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
-  // -----------------------------
-  // GUARDAR LICITACIÓN
-  // -----------------------------
+  /* ============================================================
+     GUARDAR LICITACIÓN
+  ============================================================ */
   async function guardarLicitacion() {
     setToast(null);
 
     const errores = [];
     if (!idLicitacionInput) errores.push("ID Licitación");
-    if (!nombre) errores.push("Nombre de Licitación");
+    if (!nombre) errores.push("Nombre Licitación");
     if (!fechaHoraCierre) errores.push("Fecha y Hora de Cierre");
     if (!monto) errores.push("Monto");
-
     if (!rutEntidad) errores.push("RUT Entidad");
     if (!nombreEntidad) errores.push("Nombre Entidad");
     if (!departamento) errores.push("Departamento");
@@ -218,7 +277,7 @@ export default function CrearLicitacion() {
     if (errores.length > 0) {
       setToast({
         type: "error",
-        message: `Faltan campos obligatorios:\n\n• ${errores.join("\n• ")}`,
+        message: "Faltan campos obligatorios:\n\n• " + errores.join("\n• "),
       });
       return;
     }
@@ -232,16 +291,14 @@ export default function CrearLicitacion() {
         {
           id_licitacion: idLicitacionInput,
           nombre,
-
           fecha_hora_cierre: fechaHoraCierre,
           monto: Number(monto),
           lista_precios: Number(listado),
 
-          rut_entidad: rutEntidad,
-          nombre_entidad: nombreEntidad,
+          rut_entidad,
+          nombre_entidad,
           departamento,
           municipalidad,
-
           direccion,
           ciudad,
           contacto,
@@ -254,7 +311,7 @@ export default function CrearLicitacion() {
           estado: "En espera",
 
           total_con_iva: totalConIVA,
-          total_sin_iva: totalSinIVA,
+          total_sin_iva: totalNeto,
           total_iva: totalIVA,
         },
       ])
@@ -268,7 +325,6 @@ export default function CrearLicitacion() {
 
     const idLicitacion = lic.id;
 
-    // ITEMS
     for (const it of items) {
       await supabase.from("items_licitacion").insert([
         {
@@ -285,13 +341,12 @@ export default function CrearLicitacion() {
       ]);
     }
 
-    // PDF
     await generarPDFcotizacion({
       numero_licitacion: idLicitacion,
       fecha_emision: fechaHoy,
 
-      nombre_entidad: nombreEntidad,
-      rut_entidad: rutEntidad,
+      nombre_entidad,
+      rut_entidad,
       direccion,
       ciudad,
       contacto,
@@ -301,43 +356,42 @@ export default function CrearLicitacion() {
 
       items_tabla: items
         .map((it) => {
-          const filaPrincipal = `
+          const fila = `
             <tr>
               <td>${it.sku}</td>
               <td>${it.producto}</td>
               <td>${it.formato}</td>
               <td>${it.cantidad}</td>
-              <td>$ ${it.precio}</td>
-              <td>$ ${it.total}</td>
+              <td>$ ${formatear(it.precio)}</td>
+              <td>$ ${formatear(it.total)}</td>
             </tr>
           `;
 
           const filaObs = it.observacion
             ? `
-              <tr>
-                <td></td>
-                <td colspan="5" style="font-style: italic; color: #444;">
-                  Observación: ${it.observacion}
-                </td>
-              </tr>
-            `
+            <tr>
+              <td></td>
+              <td colspan="5" style="font-style: italic; color: #444;">
+                Observación: ${it.observacion}
+              </td>
+            </tr>`
             : "";
 
-          return filaPrincipal + filaObs;
+          return fila + filaObs;
         })
         .join(""),
 
-      afecto: totalSinIVA,
-      iva: totalIVA,
-      total_con_iva: totalConIVA,
+      afecto: formatear(totalNeto),
+      iva: formatear(totalIVA),
+      total_con_iva: formatear(totalConIVA),
     });
 
     setToast({
       type: "success",
-      message: `La licitación "${nombre}" fue creada exitosamente.`,
+      message: `La licitación "${nombre}" fue creada correctamente.`,
     });
 
-    // RESET
+    // Reset
     setIdLicitacionInput("");
     setNombre("");
     setFechaHoraCierre("");
@@ -369,29 +423,52 @@ export default function CrearLicitacion() {
     ]);
   }
 
-  // -----------------------------
-  // SELECT STYLES
-  // -----------------------------
-  const opcionesSKU = productos.map((p) => ({ value: p.sku, label: p.sku }));
+  /* ============================================================
+     OPCIONES SELECT
+  ============================================================ */
+  const opcionesSKU = productos.map((p) => ({
+    value: p.sku,
+    label: p.sku,
+  }));
+
   const opcionesProducto = productos.map((p) => ({
     value: p.nombre,
     label: p.nombre,
   }));
 
-  const customStyles = {
-    control: (base) => ({
-      ...base,
-      minHeight: "40px",
-      fontSize: "0.875rem",
-    }),
-    menuPortal: (base) => ({ ...base, zIndex: 99999 }),
-  };
-
-  // -----------------------------
-  // UI
-  // -----------------------------
+  /* ============================================================
+     UI
+  ============================================================ */
   return (
     <div className="w-full max-w-7xl mx-auto p-8">
+
+      {/* Tooltip Animado Azul */}
+      {tooltip.visible && (
+        <div
+          style={{
+            position: "fixed",
+            top: tooltip.y + 10,
+            left: tooltip.x,
+            padding: "8px 12px",
+            background: "linear-gradient(135deg, #1e3a8a, #2563eb)",
+            color: "white",
+            fontSize: "12px",
+            borderRadius: "6px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            zIndex: 99999,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            opacity: tooltip.visible ? 1 : 0,
+            transform: tooltip.visible
+              ? "translateY(0px)"
+              : "translateY(-6px)",
+            transition: "opacity 0.15s ease, transform 0.15s ease",
+          }}
+        >
+          {tooltip.texto}
+        </div>
+      )}
+
       {toast && (
         <Toast
           type={toast.type}
@@ -404,13 +481,17 @@ export default function CrearLicitacion() {
         Crear Licitación
       </h1>
 
-      {/* SECCIÓN DATOS LICITACIÓN */}
+      {/* ============================================================
+          DATOS LICITACIÓN
+      ============================================================ */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">
         Datos de la Licitación
       </h2>
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               ID Licitación *
@@ -422,6 +503,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
+          {/* NOMBRE */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre Licitación *
@@ -433,6 +515,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
+          {/* FECHA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha y Hora de Cierre *
@@ -445,6 +528,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
+          {/* MONTO */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Monto Presupuesto *
@@ -457,6 +541,7 @@ export default function CrearLicitacion() {
             />
           </div>
 
+          {/* LISTA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Lista de Precios *
@@ -478,7 +563,9 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* SECCIÓN DATOS ENTIDAD */}
+      {/* ============================================================
+          DATOS ENTIDAD
+      ============================================================ */}
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-xl font-semibold text-gray-800">
           Datos de la Entidad
@@ -498,6 +585,8 @@ export default function CrearLicitacion() {
         }`}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          {/* CAMPOS */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               RUT *
@@ -598,9 +687,9 @@ export default function CrearLicitacion() {
             />
           </div>
 
-          <div className="md:col-span-1">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cond. Venta *
+              Condiciones de Venta *
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -611,7 +700,9 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* ITEMS */}
+      {/* ============================================================
+          ÍTEMS
+============================================================ */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">Ítems</h2>
 
       <div className="space-y-6 max-h-[480px] overflow-y-auto overflow-x-auto pr-2">
@@ -620,20 +711,19 @@ export default function CrearLicitacion() {
             key={index}
             className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3"
           >
-            {/* PRIMERA FILA */}
             <div className="grid grid-cols-1 md:grid-cols-18 gap-4 items-end">
+
               {/* SKU */}
               <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  SKU
-                </label>
+                <label className="block text-xs text-gray-600 mb-1">SKU</label>
+
                 <Select
                   options={opcionesSKU}
                   styles={customStyles}
+                  placeholder="Seleccione SKU…"
                   menuPortalTarget={document.body}
-                  value={
-                    opcionesSKU.find((o) => o.value === it.sku) || null
-                  }
+                  isSearchable={true}
+                  value={opcionesSKU.find((o) => o.value === it.sku) || null}
                   onChange={(op) =>
                     actualizarItem(index, "sku", op ? op.value : "")
                   }
@@ -645,21 +735,22 @@ export default function CrearLicitacion() {
                 <label className="block text-xs text-gray-600 mb-1">
                   Producto
                 </label>
+
                 <Select
                   options={opcionesProducto}
                   styles={customStyles}
+                  placeholder="Seleccione producto…"
                   menuPortalTarget={document.body}
+                  isSearchable={true}
                   value={
                     opcionesProducto.find((o) => o.value === it.producto) ||
                     null
                   }
                   onChange={(op) =>
-                    actualizarItem(
-                      index,
-                      "producto",
-                      op ? op.value : ""
-                    )
+                    actualizarItem(index, "producto", op ? op.value : "")
                   }
+                  components={{ SingleValue: ProductoSingleValue }}
+                  selectProps={{ setTooltip }}
                 />
               </div>
 
@@ -669,7 +760,7 @@ export default function CrearLicitacion() {
                   Categoría
                 </label>
                 <input
-                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-[13px]"
                   value={it.categoria}
                   readOnly
                 />
@@ -696,8 +787,18 @@ export default function CrearLicitacion() {
                 </label>
                 <input
                   type="number"
+                  min="1"
                   className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
                   value={it.cantidad}
+                  onInput={(e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                    if (
+                      e.target.value === "" ||
+                      Number(e.target.value) <= 0
+                    ) {
+                      e.target.value = "1";
+                    }
+                  }}
                   onChange={(e) =>
                     actualizarItem(index, "cantidad", e.target.value)
                   }
@@ -729,7 +830,7 @@ export default function CrearLicitacion() {
                 </div>
               </div>
 
-              {/* BOTÓN OBS */}
+              {/* MOSTRAR OBS */}
               <div className="md:col-span-1 flex justify-center">
                 <button
                   onClick={() => toggleObservacion(index)}
@@ -739,7 +840,7 @@ export default function CrearLicitacion() {
                 </button>
               </div>
 
-              {/* BOTÓN ELIMINAR */}
+              {/* ELIMINAR */}
               <div className="md:col-span-1 flex justify-center">
                 {items.length > 1 && (
                   <button
@@ -752,7 +853,7 @@ export default function CrearLicitacion() {
               </div>
             </div>
 
-            {/* SEGUNDA FILA → OBSERVACIÓN */}
+            {/* OBSERVACIÓN */}
             {it.mostrarObs && (
               <div className="grid grid-cols-1 md:grid-cols-18 transition-all">
                 <div className="md:col-span-10">
@@ -773,7 +874,9 @@ export default function CrearLicitacion() {
         ))}
       </div>
 
-      {/* RESUMEN */}
+      {/* ============================================================
+          RESUMEN
+============================================================ */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
@@ -783,7 +886,7 @@ export default function CrearLicitacion() {
               Neto
             </label>
             <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalSinIVA.toLocaleString("es-CL")}
+              ${totalNeto.toLocaleString("es-CL")}
             </div>
           </div>
 
@@ -820,7 +923,9 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* BOTONES */}
+      {/* ============================================================
+          BOTONES
+============================================================ */}
       <div className="flex gap-4 mt-6">
         <button
           onClick={agregarItem}

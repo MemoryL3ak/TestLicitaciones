@@ -90,6 +90,404 @@ option: (base, state) => ({
   }),
 };
 
+
+const REGIONES_CHILE = {
+  "Arica y Parinacota": [
+    "Arica",
+    "Camarones",
+    "Putre",
+    "General Lagos",
+  ],
+
+  "Tarapacá": [
+    "Iquique",
+    "Alto Hospicio",
+    "Pozo Almonte",
+    "Camiña",
+    "Colchane",
+    "Huara",
+    "Pica",
+  ],
+
+  "Antofagasta": [
+    "Antofagasta",
+    "Mejillones",
+    "Sierra Gorda",
+    "Taltal",
+    "Calama",
+    "Ollagüe",
+    "San Pedro de Atacama",
+    "Tocopilla",
+    "María Elena",
+  ],
+
+  "Atacama": [
+    "Copiapó",
+    "Caldera",
+    "Tierra Amarilla",
+    "Chañaral",
+    "Diego de Almagro",
+    "Vallenar",
+    "Alto del Carmen",
+    "Freirina",
+    "Huasco",
+  ],
+
+  "Coquimbo": [
+    "La Serena",
+    "Coquimbo",
+    "Andacollo",
+    "La Higuera",
+    "Paihuano",
+    "Vicuña",
+    "Illapel",
+    "Canela",
+    "Los Vilos",
+    "Salamanca",
+    "Ovalle",
+    "Combarbalá",
+    "Monte Patria",
+    "Punitaqui",
+    "Río Hurtado",
+  ],
+
+  "Valparaíso": [
+    "Valparaíso",
+    "Casablanca",
+    "Concón",
+    "Juan Fernández",
+    "Puchuncaví",
+    "Quintero",
+    "Viña del Mar",
+    "Isla de Pascua",
+    "Los Andes",
+    "Calle Larga",
+    "Rinconada",
+    "San Esteban",
+    "La Ligua",
+    "Cabildo",
+    "Papudo",
+    "Petorca",
+    "Zapallar",
+    "Quillota",
+    "Calera",
+    "Hijuelas",
+    "La Cruz",
+    "Nogales",
+    "San Antonio",
+    "Algarrobo",
+    "Cartagena",
+    "El Quisco",
+    "El Tabo",
+    "Santo Domingo",
+    "San Felipe",
+    "Catemu",
+    "Llaillay",
+    "Panquehue",
+    "Putaendo",
+    "Santa María",
+    "Quilpué",
+    "Limache",
+    "Olmué",
+    "Villa Alemana",
+  ],
+
+  "Metropolitana de Santiago": [
+    "Cerrillos",
+    "Cerro Navia",
+    "Conchalí",
+    "El Bosque",
+    "Estación Central",
+    "Huechuraba",
+    "Independencia",
+    "La Cisterna",
+    "La Florida",
+    "La Granja",
+    "La Pintana",
+    "La Reina",
+    "Las Condes",
+    "Lo Barnechea",
+    "Lo Espejo",
+    "Lo Prado",
+    "Macul",
+    "Maipú",
+    "Ñuñoa",
+    "Pedro Aguirre Cerda",
+    "Peñalolén",
+    "Providencia",
+    "Pudahuel",
+    "Quilicura",
+    "Quinta Normal",
+    "Recoleta",
+    "Renca",
+    "San Joaquín",
+    "San Miguel",
+    "San Ramón",
+    "Santiago",
+    "Vitacura",
+    "Puente Alto",
+    "Pirque",
+    "San José de Maipo",
+    "Colina",
+    "Lampa",
+    "Tiltil",
+    "San Bernardo",
+    "Buin",
+    "Calera de Tango",
+    "Paine",
+    "Melipilla",
+    "Alhué",
+    "Curacaví",
+    "María Pinto",
+    "San Pedro",
+    "Talagante",
+    "El Monte",
+    "Isla de Maipo",
+    "Padre Hurtado",
+    "Peñaflor",
+  ],
+
+  "O'Higgins": [
+    "Rancagua",
+    "Codegua",
+    "Coinco",
+    "Coltauco",
+    "Doñihue",
+    "Graneros",
+    "Las Cabras",
+    "Machalí",
+    "Malloa",
+    "Mostazal",
+    "Olivar",
+    "Peumo",
+    "Pichidegua",
+    "Quinta de Tilcoco",
+    "Rengo",
+    "Requínoa",
+    "San Vicente",
+    "Pichilemu",
+    "La Estrella",
+    "Litueche",
+    "Marchigüe",
+    "Navidad",
+    "Paredones",
+    "San Fernando",
+    "Chépica",
+    "Chimbarongo",
+    "Lolol",
+    "Nancagua",
+    "Palmilla",
+    "Peralillo",
+    "Placilla",
+    "Pumanque",
+    "Santa Cruz",
+  ],
+
+  "Maule": [
+    "Talca",
+    "Constitución",
+    "Curepto",
+    "Empedrado",
+    "Maule",
+    "Pelarco",
+    "Pencahue",
+    "Río Claro",
+    "San Clemente",
+    "San Rafael",
+    "Cauquenes",
+    "Chanco",
+    "Pelluhue",
+    "Curicó",
+    "Hualañé",
+    "Licantén",
+    "Molina",
+    "Rauco",
+    "Romeral",
+    "Sagrada Familia",
+    "Teno",
+    "Vichuquén",
+    "Linares",
+    "Colbún",
+    "Longaví",
+    "Parral",
+    "Retiro",
+    "San Javier",
+    "Villa Alegre",
+    "Yerbas Buenas",
+  ],
+
+  "Ñuble": [
+    "Chillán",
+    "Bulnes",
+    "Chillán Viejo",
+    "El Carmen",
+    "Pemuco",
+    "Pinto",
+    "Quillón",
+    "San Ignacio",
+    "Yungay",
+    "Coelemu",
+    "Ninhue",
+    "Portezuelo",
+    "Quirihue",
+    "Ránquil",
+    "Treguaco",
+    "San Carlos",
+    "Coihueco",
+    "Ñiquén",
+    "San Fabián",
+    "San Nicolás",
+  ],
+
+  "Biobío": [
+    "Concepción",
+    "Coronel",
+    "Chiguayante",
+    "Florida",
+    "Hualqui",
+    "Lota",
+    "Penco",
+    "San Pedro de la Paz",
+    "Santa Juana",
+    "Talcahuano",
+    "Tomé",
+    "Hualpén",
+    "Lebu",
+    "Arauco",
+    "Cañete",
+    "Contulmo",
+    "Curanilahue",
+    "Los Álamos",
+    "Tirúa",
+    "Los Ángeles",
+    "Antuco",
+    "Cabrero",
+    "Laja",
+    "Mulchén",
+    "Nacimiento",
+    "Negrete",
+    "Quilaco",
+    "Quilleco",
+    "San Rosendo",
+    "Santa Bárbara",
+    "Tucapel",
+    "Yumbel",
+    "Alto Biobío",
+  ],
+
+  "La Araucanía": [
+    "Temuco",
+    "Carahue",
+    "Cunco",
+    "Curarrehue",
+    "Freire",
+    "Galvarino",
+    "Gorbea",
+    "Lautaro",
+    "Loncoche",
+    "Melipeuco",
+    "Nueva Imperial",
+    "Padre Las Casas",
+    "Perquenco",
+    "Pitrufquén",
+    "Pucón",
+    "Saavedra",
+    "Teodoro Schmidt",
+    "Toltén",
+    "Vilcún",
+    "Villarrica",
+    "Cholchol",
+    "Angol",
+    "Collipulli",
+    "Curacautín",
+    "Ercilla",
+    "Lonquimay",
+    "Los Sauces",
+    "Lumaco",
+    "Purén",
+    "Renaico",
+    "Traiguén",
+    "Victoria",
+  ],
+
+  "Los Ríos": [
+    "Valdivia",
+    "Corral",
+    "Lanco",
+    "Los Lagos",
+    "Máfil",
+    "Mariquina",
+    "Paillaco",
+    "Panguipulli",
+    "La Unión",
+    "Futrono",
+    "Lago Ranco",
+    "Río Bueno",
+  ],
+
+  "Los Lagos": [
+    "Puerto Montt",
+    "Calbuco",
+    "Cochamó",
+    "Fresia",
+    "Frutillar",
+    "Los Muermos",
+    "Llanquihue",
+    "Maullín",
+    "Puerto Varas",
+    "Castro",
+    "Ancud",
+    "Chonchi",
+    "Curaco de Vélez",
+    "Dalcahue",
+    "Puqueldón",
+    "Queilén",
+    "Quellón",
+    "Quemchi",
+    "Quinchao",
+    "Osorno",
+    "Puerto Octay",
+    "Purranque",
+    "Puyehue",
+    "Río Negro",
+    "San Juan de la Costa",
+    "San Pablo",
+  ],
+
+  "Aysén": [
+    "Coyhaique",
+    "Lago Verde",
+    "Aysén",
+    "Cisnes",
+    "Guaitecas",
+    "Cochrane",
+    "O'Higgins",
+    "Tortel",
+    "Chile Chico",
+    "Río Ibáñez",
+  ],
+
+  "Magallanes y de la Antártica Chilena": [
+    "Punta Arenas",
+    "Laguna Blanca",
+    "Río Verde",
+    "San Gregorio",
+    "Cabo de Hornos",
+    "Antártica",
+    "Porvenir",
+    "Primavera",
+    "Timaukel",
+    "Natales",
+    "Torres del Paine",
+  ],
+};
+
+
+
+const STORAGE_KEY = "crear_licitacion_draft";
+
+
+
 /* ============================================================
    COMPONENTE PRINCIPAL
 ============================================================ */
@@ -101,6 +499,9 @@ export default function CrearLicitacion() {
     x: 0,
     y: 0,
   });
+
+
+
 
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
@@ -115,11 +516,15 @@ export default function CrearLicitacion() {
   const [departamento, setDepartamento] = useState("");
   const [municipalidad, setMunicipalidad] = useState("");
   const [direccion, setDireccion] = useState("");
-  const [ciudad, setCiudad] = useState("");
   const [contacto, setContacto] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [condVenta, setCondVenta] = useState("");
+  const [fleteEstimado, setFleteEstimado] = useState(0);
+const [tipoCompra, setTipoCompra] = useState("Compra ágil");
+const [region, setRegion] = useState("");
+const [comuna, setComuna] = useState("");
+
 
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
@@ -137,6 +542,103 @@ export default function CrearLicitacion() {
       mostrarObs: false,
     },
   ]);
+
+const [hydrated, setHydrated] = useState(false);
+
+
+
+
+useEffect(() => {
+  const guardado = localStorage.getItem(STORAGE_KEY);
+  if (!guardado) return;
+
+  try {
+    const data = JSON.parse(guardado);
+
+    setIdLicitacionInput(data.idLicitacionInput || "");
+    setNombre(data.nombre || "");
+    setFechaHoraCierre(data.fechaHoraCierre || "");
+    setMonto(data.monto || "");
+    setListado(data.listado || "1");
+
+    setRutEntidad(data.rutEntidad || "");
+    setNombreEntidad(data.nombreEntidad || "");
+    setDepartamento(data.departamento || "");
+    setMunicipalidad(data.municipalidad || "");
+    setDireccion(data.direccion || "");
+    setContacto(data.contacto || "");
+    setEmail(data.email || "");
+    setTelefono(data.telefono || "");
+    setCondVenta(data.condVenta || "");
+
+    setFleteEstimado(data.fleteEstimado || 0);
+    setTipoCompra(data.tipoCompra || "Compra ágil");
+    setRegion(data.region || "");
+    setComuna(data.comuna || "");
+
+    setItems(data.items || []);
+   } catch (e) {
+    console.error("Error cargando borrador de licitación", e);
+  } finally {
+    setHydrated(true);
+  }
+}, []);
+
+
+
+
+useEffect(() => {
+  if (!hydrated) return;
+
+  const data = {
+    idLicitacionInput,
+    nombre,
+    fechaHoraCierre,
+    monto,
+    listado,
+    rutEntidad,
+    nombreEntidad,
+    departamento,
+    municipalidad,
+    direccion,
+    contacto,
+    email,
+    telefono,
+    condVenta,
+    fleteEstimado,
+    tipoCompra,
+    region,
+    comuna,
+    items,
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}, [
+  hydrated,
+  idLicitacionInput,
+  nombre,
+  fechaHoraCierre,
+  monto,
+  listado,
+  rutEntidad,
+  nombreEntidad,
+  departamento,
+  municipalidad,
+  direccion,
+  contacto,
+  email,
+  telefono,
+  condVenta,
+  fleteEstimado,
+  tipoCompra,
+  region,
+  comuna,
+  items,
+]);
+
+
+
+
 
   /* ============================================================
      CARGA DE PRODUCTOS
@@ -164,13 +666,20 @@ export default function CrearLicitacion() {
       const prod = productos.find((p) => p.sku === it.sku);
       if (!prod) return it;
 
-      const precio = Number(prod[`lista${nuevaLista}`] ?? 0);
+const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
+const precio = Number(prod[listaValida] ?? 0);
 
-      return {
-        ...it,
-        precio,
-        total: redondear(it.cantidad * precio),
-      };
+    const precioConFlete = precio + fletePorUnidad;
+
+return {
+  ...it,
+  precio,
+  total: redondear(it.cantidad * precioConFlete),
+};
+
+
+
+      
     });
 
     setItems(copia);
@@ -198,7 +707,12 @@ export default function CrearLicitacion() {
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
-    item.total = redondear(cantidad * Number(item.precio || 0));
+
+const precioBase = Number(item.precio || 0);
+const precioConFlete = precioBase + fletePorUnidad;
+
+item.total = redondear(cantidad * precioConFlete);
+
 
     copia[index] = item;
     setItems(copia);
@@ -240,7 +754,47 @@ export default function CrearLicitacion() {
   /* ============================================================
      RESUMEN
   ============================================================ */
+  const cantidadProductos = items.reduce(
+  (acc, it) => acc + Number(it.cantidad || 0),
+  0
+);
+
+const fletePorUnidad =
+  cantidadProductos > 0
+    ? redondear(Number(fleteEstimado) / cantidadProductos)
+    : 0;
+
+
+
+
+
+useEffect(() => {
+  if (!hydrated) return;
+
+  const copia = items.map((it) => {
+    const cantidad = Math.max(1, Number(it.cantidad || 1));
+    const precioBase = Number(it.precio || 0);
+    const precioConFlete = precioBase + fletePorUnidad;
+
+    return {
+      ...it,
+      total: redondear(cantidad * precioConFlete),
+    };
+  });
+
+  setItems(copia);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [fletePorUnidad, hydrated]);
+
+
+
+
+
+
+
   const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
+
+
   const totalIVA = Math.round(total * 0.19);
   const totalNeto = total - totalIVA;
 
@@ -273,6 +827,10 @@ export default function CrearLicitacion() {
     if (!nombreEntidad) errores.push("Nombre Entidad");
     if (!departamento) errores.push("Departamento");
     if (!municipalidad) errores.push("Municipalidad");
+    if (!tipoCompra) errores.push("Tipo de Compra");
+if (!region) errores.push("Región");
+if (!comuna) errores.push("Comuna");
+
 
     if (errores.length > 0) {
       setToast({
@@ -295,12 +853,14 @@ export default function CrearLicitacion() {
           monto: Number(monto),
           lista_precios: Number(listado),
 
-          rut_entidad,
-          nombre_entidad,
+          rut_entidad: rutEntidad,
+      nombre_entidad: nombreEntidad,
           departamento,
           municipalidad,
           direccion,
-          ciudad,
+          tipo_compra: tipoCompra,
+region,
+comuna,
           contacto,
           email,
           telefono,
@@ -332,7 +892,8 @@ export default function CrearLicitacion() {
           producto: it.producto,
           formato: it.formato,
           cantidad: Number(it.cantidad),
-          valor_unitario: Number(it.precio),
+          valor_unitario: Number(it.precio) + fletePorUnidad,
+
           sku: it.sku,
           total: Number(it.total),
           categoria: it.categoria,
@@ -345,10 +906,10 @@ export default function CrearLicitacion() {
       numero_licitacion: idLicitacion,
       fecha_emision: fechaHoy,
 
-      nombre_entidad,
-      rut_entidad,
+      nombre_entidad: nombreEntidad,
+  rut_entidad: rutEntidad,
       direccion,
-      ciudad,
+      comuna,
       contacto,
       email,
       telefono,
@@ -362,7 +923,8 @@ export default function CrearLicitacion() {
               <td>${it.producto}</td>
               <td>${it.formato}</td>
               <td>${it.cantidad}</td>
-              <td>$ ${formatear(it.precio)}</td>
+              <td>$ ${formatear(Number(it.precio) + fletePorUnidad)}</td>
+
               <td>$ ${formatear(it.total)}</td>
             </tr>
           `;
@@ -387,9 +949,12 @@ export default function CrearLicitacion() {
     });
 
     setToast({
-      type: "success",
-      message: `La licitación "${nombre}" fue creada correctamente.`,
-    });
+  type: "success",
+  message: `La licitación "${nombre}" fue creada correctamente.`,
+});
+
+localStorage.removeItem(STORAGE_KEY);
+
 
     // Reset
     setIdLicitacionInput("");
@@ -402,7 +967,9 @@ export default function CrearLicitacion() {
     setDepartamento("");
     setMunicipalidad("");
     setDireccion("");
-    setCiudad("");
+setRegion("");
+setComuna("");
+
     setContacto("");
     setEmail("");
     setTelefono("");
@@ -556,12 +1123,35 @@ export default function CrearLicitacion() {
             >
               <option value="1">Lista 1</option>
               <option value="2">Lista 2</option>
-              <option value="3">Lista 3</option>
-              <option value="4">Lista 4</option>
+            
             </select>
           </div>
+
+ {/* TIPO DE COMPRA */}
+
+      <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Tipo de Compra *
+  </label>
+  <select
+    className="w-full rounded-md border border-gray-300 px-3 py-2"
+    value={tipoCompra}
+    onChange={(e) => setTipoCompra(e.target.value)}
+  >
+    <option value="Compra ágil">Compra ágil</option>
+    <option value="Compra directa">Compra directa</option>
+    <option value="Licitación">Licitación</option>
+  </select>
+</div>
+
+
+
+
         </div>
       </div>
+
+
+
 
       {/* ============================================================
           DATOS ENTIDAD
@@ -631,6 +1221,60 @@ export default function CrearLicitacion() {
             />
           </div>
 
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Región *
+  </label>
+  <select
+    className="w-full rounded-md border border-gray-300 px-3 py-2"
+    value={region}
+    onChange={(e) => {
+      setRegion(e.target.value);
+      setComuna("");
+    }}
+  >
+    <option value="">Seleccione región</option>
+    {Object.keys(REGIONES_CHILE).map((reg) => (
+      <option key={reg} value={reg}>
+        {reg}
+      </option>
+    ))}
+  </select>
+</div>
+
+
+
+
+
+    <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Comuna *
+  </label>
+  <select
+    className="w-full rounded-md border border-gray-300 px-3 py-2"
+    value={comuna}
+    onChange={(e) => setComuna(e.target.value)}
+    disabled={!region}
+  >
+    <option value="">
+      {region ? "Seleccione comuna" : "Seleccione región primero"}
+    </option>
+
+    {region &&
+      REGIONES_CHILE[region]?.map((c) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+  </select>
+</div>
+
+
+
+
+
+
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Dirección *
@@ -642,16 +1286,14 @@ export default function CrearLicitacion() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ciudad *
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={ciudad}
-              onChange={(e) => setCiudad(e.target.value)}
-            />
-          </div>
+
+
+
+
+
+
+
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -805,20 +1447,24 @@ export default function CrearLicitacion() {
                 />
               </div>
 
-              {/* PRECIO */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Precio Unitario
-                </label>
-                <input
-                  type="number"
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-                  value={it.precio}
-                  onChange={(e) =>
-                    actualizarItem(index, "precio", e.target.value)
-                  }
-                />
-              </div>
+
+
+            {/* PRECIO UNITARIO (BASE + FLETE) */}
+<div className="md:col-span-2">
+  <label className="block text-xs text-gray-600 mb-1">
+    Precio Unitario
+  </label>
+  <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
+    $
+    {(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
+  </div>
+</div>
+
+
+
+
+
+
 
               {/* TOTAL */}
               <div className="md:col-span-1">
@@ -874,54 +1520,102 @@ export default function CrearLicitacion() {
         ))}
       </div>
 
-      {/* ============================================================
-          RESUMEN
+{/* ============================================================
+    RESUMEN
 ============================================================ */}
-      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
+<div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
+  <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Neto
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalNeto.toLocaleString("es-CL")}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              IVA 19%
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              ${totalIVA.toLocaleString("es-CL")}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Total
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalConIVA.toLocaleString("es-CL")}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              % Presupuesto
-            </label>
-            <div
-              className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
-            >
-              {porcentajePresupuesto > 0
-                ? porcentajePresupuesto.toFixed(2) + "%"
-                : "0%"}
-            </div>
-          </div>
-        </div>
+  {/* FILA SUPERIOR */}
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Cantidad de Productos
+      </label>
+      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+        {cantidadProductos}
       </div>
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Flete Estimado
+      </label>
+      <input
+        type="number"
+        className="w-full h-10 rounded-md border border-gray-300 px-3"
+        value={fleteEstimado}
+        onChange={(e) => setFleteEstimado(e.target.value)}
+      />
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Flete por Unidad
+      </label>
+      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+        ${fletePorUnidad.toLocaleString("es-CL")}
+      </div>
+    </div>
+
+    <div></div>
+  </div>
+
+  {/* FILA INFERIOR */}
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Neto
+      </label>
+      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+        ${totalNeto.toLocaleString("es-CL")}
+      </div>
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        IVA 19%
+      </label>
+      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+        ${totalIVA.toLocaleString("es-CL")}
+      </div>
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Total
+      </label>
+      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+        ${totalConIVA.toLocaleString("es-CL")}
+      </div>
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        % Presupuesto
+      </label>
+      <div
+        className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
+      >
+        {porcentajePresupuesto > 0
+          ? porcentajePresupuesto.toFixed(2) + "%"
+          : "0%"}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
 
       {/* ============================================================
           BOTONES

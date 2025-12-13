@@ -7,6 +7,7 @@ export default function CrearProducto() {
   const [sku, setSku] = useState("");
   const [estado, setEstado] = useState("Transitorio");
   const [nombre, setNombre] = useState("");
+  const [marca, setMarca] = useState(""); // ← NUEVO
   const [categoria, setCategoria] = useState("");
   const [formato, setFormato] = useState("");
 
@@ -18,10 +19,10 @@ export default function CrearProducto() {
   });
 
   const [toast, setToast] = useState(null);
-  const [rol, setRol] = useState(null); // ← NUEVO (solo esto añadido)
+  const [rol, setRol] = useState(null);
 
   /* ==========================================================
-     Cargar rol del usuario (sin tocar estilos)
+     Cargar rol del usuario
   ========================================================== */
   useEffect(() => {
     async function obtenerRol() {
@@ -40,10 +41,6 @@ export default function CrearProducto() {
     obtenerRol();
   }, []);
 
-  /* ==========================================================
-     No tocar nada más — SOLO aplicar reglas de rol
-  ========================================================== */
-
   function actualizarPrecio(lista, valor) {
     setPrecios({ ...precios, [lista]: valor });
   }
@@ -60,7 +57,6 @@ export default function CrearProducto() {
       return;
     }
 
-    // REGLA: Si NO es administrador, debe guardar SKU como null
     const skuPermitido = rol === "Administrador" ? skuLimpio : null;
 
     const { error } = await supabase.from("productos").insert([
@@ -68,12 +64,13 @@ export default function CrearProducto() {
         sku: skuPermitido,
         estado: estadoFinal,
         nombre,
+        marca, // ← NUEVO
         categoria,
         formato,
         lista1: Number(precios.lista1) || 0,
         lista2: Number(precios.lista2) || 0,
-        lista3: Number(precios.lista3) || 0,
-        lista4: Number(precios.lista4) || 0,
+        lista3: 0,
+        lista4: 0,
       },
     ]);
 
@@ -94,6 +91,7 @@ export default function CrearProducto() {
     setSku("");
     setEstado("Transitorio");
     setNombre("");
+    setMarca(""); // ← RESET
     setCategoria("");
     setFormato("");
     setPrecios({ lista1: "", lista2: "", lista3: "", lista4: "" });
@@ -101,7 +99,6 @@ export default function CrearProducto() {
 
   return (
     <div className="mx-auto max-w-4xl p-8">
-
       {toast && (
         <Toast
           type={toast.type}
@@ -123,7 +120,6 @@ export default function CrearProducto() {
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
         <div className="grid grid-cols-1 gap-6">
-
           {/* ESTADO */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -136,7 +132,7 @@ export default function CrearProducto() {
             />
           </div>
 
-          {/* SKU — bloqueado para Supervisor/Usuario */}
+          {/* SKU */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               SKU
@@ -144,7 +140,7 @@ export default function CrearProducto() {
             <input
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={sku}
-              disabled={rol !== "Administrador"}   // ← REGLA
+              disabled={rol !== "Administrador"}
               onChange={(e) => {
                 const val = e.target.value;
                 setSku(val);
@@ -159,7 +155,7 @@ export default function CrearProducto() {
             )}
           </div>
 
-          {/* Nombre */}
+          {/* NOMBRE */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre del Producto
@@ -171,7 +167,20 @@ export default function CrearProducto() {
             />
           </div>
 
-          {/* Categoría */}
+          {/* MARCA */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Marca
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              value={marca}
+              onChange={(e) => setMarca(e.target.value)}
+              placeholder="Ej: Curaprox, Vitis, Dentaid"
+            />
+          </div>
+
+          {/* CATEGORÍA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Categoría
@@ -180,11 +189,10 @@ export default function CrearProducto() {
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
-              placeholder="Ej: Limpieza, Protección…"
             />
           </div>
 
-          {/* Formato */}
+          {/* FORMATO */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Formato
@@ -193,27 +201,30 @@ export default function CrearProducto() {
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={formato}
               onChange={(e) => setFormato(e.target.value)}
-              placeholder="Ej: Bidón, Caja, Botella…"
             />
           </div>
 
-          {/* Listas de precios */}
+          {/* PRECIOS */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">
               Listas de Precios
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {["lista1", "lista2", "lista3", "lista4"].map((list) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {["lista1", "lista2"].map((list) => (
                 <div key={list}>
                   <label className="block text-sm text-gray-600 mb-1">
-                    {list.replace("lista", "Lista ")}
+                    {list === "lista1"
+                      ? "Listado de Precios 1"
+                      : "Listado de Precios 2"}
                   </label>
                   <input
                     type="number"
                     className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
                     value={precios[list]}
-                    onChange={(e) => actualizarPrecio(list, e.target.value)}
+                    onChange={(e) =>
+                      actualizarPrecio(list, e.target.value)
+                    }
                   />
                 </div>
               ))}
@@ -221,14 +232,17 @@ export default function CrearProducto() {
           </div>
         </div>
 
-        {/* BOTÓN */}
         <div className="mt-6">
-          <button
-            onClick={guardarProducto}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 cursor-pointer"
-          >
-            Guardar Producto
-          </button>
+
+       <button
+  type="button"
+  onClick={guardarProducto}   // o guardarCambios
+  className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
+             hover:bg-blue-700 transition-colors"
+>
+  Guardar Producto
+</button>
+
         </div>
       </div>
     </div>

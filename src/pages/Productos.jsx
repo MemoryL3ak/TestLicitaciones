@@ -1,78 +1,110 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
 import ConfirmModal from "../components/ConfirmModal";
+import Select from "react-select";
 
 export default function Productos() {
   const [productos, setProductos] = useState([]);
+
   const [filtroSKU, setFiltroSKU] = useState("");
   const [filtroProducto, setFiltroProducto] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroMarcas, setFiltroMarcas] = useState([]); // ← react-select
+  const [ordenPrecio, setOrdenPrecio] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState(null);
 
-  // ------------------------------------------------------
-  // Cargar productos (nuevo modelo con listas incluidas)
-  // ------------------------------------------------------
-  
-  
-  
-async function cargar() {
-  const { data, error, count } = await supabase
-    .from("productos")
-    .select("*", { count: "exact" })
-    .range(0, 20000)               // 👈 FIX REAL
-    .order("id", { ascending: true });
+  /* ============================================================
+     CARGAR PRODUCTOS
+  ============================================================ */
+  async function cargar() {
+    const { data } = await supabase
+      .from("productos")
+      .select("*")
+      .range(0, 20000)
+      .order("id", { ascending: true });
 
-  console.log("ERROR:", error);
-  console.log("TOTAL PRODUCTOS:", count);
-  console.log("DATA CARGADA:", data?.length);
+    if (!data) return;
 
-  if (!data) return;
+    const clean = data.map((p) => ({
+      ...p,
+      sku: p.sku?.trim() ?? "",
+      nombre: p.nombre?.trim() ?? "",
+      categoria: p.categoria?.trim() ?? "",
+      formato: p.formato?.trim() ?? "",
+      marca: p.marca?.trim() ?? "",
+    }));
 
-  const clean = data.map((p) => ({
-    ...p,
-    sku: p.sku?.trim() ?? "",
-    nombre: p.nombre?.trim() ?? "",
-    categoria: p.categoria?.trim() ?? "",
-    formato: p.formato?.trim() ?? "",
-  }));
-
-  setProductos(clean);
-}
-
-
-
-
-
-
-
-
+    setProductos(clean);
+  }
 
   useEffect(() => {
     cargar();
   }, []);
 
-  // ------------------------------------------------------
-  // FILTROS EN VIVO
-  // ------------------------------------------------------
-  const productosFiltrados = productos.filter((p) => {
-    const matchSKU = p.sku.toLowerCase().includes(filtroSKU.toLowerCase());
-    const matchProducto = p.nombre
-      .toLowerCase()
-      .includes(filtroProducto.toLowerCase());
-    const matchCategoria = filtroCategoria
-      ? p.categoria === filtroCategoria
-      : true;
+  /* ============================================================
+     MARCAS DISPONIBLES (DINÁMICAS SEGÚN FILTRO PRODUCTO)
+  ============================================================ */
+  const marcasDisponibles = useMemo(() => {
+    const marcas = productos
+      .filter((p) =>
+        p.nombre.toLowerCase().includes(filtroProducto.toLowerCase())
+      )
+      .map((p) => p.marca)
+      .filter(Boolean);
 
-    return matchSKU && matchProducto && matchCategoria;
-  });
+    return [...new Set(marcas)].map((m) => ({
+      value: m,
+      label: m,
+    }));
+  }, [productos, filtroProducto]);
 
-  // ------------------------------------------------------
-  // ELIMINACIÓN
-  // (precios_productos ya no existe)
-  // ------------------------------------------------------
+  /* ============================================================
+     FILTROS + ORDEN
+  ============================================================ */
+  const productosFiltrados = productos
+    .filter((p) => {
+      const matchSKU = p.sku.toLowerCase().includes(filtroSKU.toLowerCase());
+      const matchProducto = p.nombre
+        .toLowerCase()
+        .includes(filtroProducto.toLowerCase());
+      const matchCategoria = filtroCategoria
+        ? p.categoria === filtroCategoria
+        : true;
+      const matchMarca =
+        filtroMarcas.length > 0
+          ? filtroMarcas.some((m) => m.value === p.marca)
+          : true;
+
+      return matchSKU && matchProducto && matchCategoria && matchMarca;
+    })
+    .sort((a, b) => {
+      if (!ordenPrecio) return 0;
+      const pa = Number(a.lista1 ?? 0);
+      const pb = Number(b.lista1 ?? 0);
+      return ordenPrecio === "asc" ? pa - pb : pb - pa;
+    });
+
+  /* ============================================================
+     LIMPIAR MARCAS NO VÁLIDAS CUANDO CAMBIA EL FILTRO PRODUCTO
+  ============================================================ */
+  useEffect(() => {
+    setFiltroMarcas((prev) =>
+      prev.filter((m) =>
+        marcasDisponibles.some((d) => d.value === m.value)
+      )
+    );
+  }, [marcasDisponibles]);
+
+  const categoriasUnicas = [
+    ...new Set(productos.map((p) => p.categoria).filter(Boolean)),
+  ];
+
+  /* ============================================================
+     ELIMINACIÓN
+  ============================================================ */
   function solicitarEliminacion(producto) {
     setProductoAEliminar(producto);
     setModalOpen(true);
@@ -82,22 +114,17 @@ async function cargar() {
     if (!productoAEliminar) return;
 
     await supabase.from("productos").delete().eq("id", productoAEliminar.id);
-
     setModalOpen(false);
     setProductoAEliminar(null);
     cargar();
   }
 
-  const categoriasUnicas = [
-    ...new Set(productos.map((p) => p.categoria).filter(Boolean)),
-  ];
-
-  // ------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------
+  /* ============================================================
+     UI
+  ============================================================ */
   return (
     <div className="max-w-6xl mx-auto p-8">
-      {/* TITULO + BOTÓN */}
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-semibold text-gray-900">Productos</h1>
 
@@ -110,23 +137,23 @@ async function cargar() {
       </div>
 
       {/* FILTROS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 relative z-20">
         <input
-          className="border border-gray-300 rounded-md px-3 py-2"
+          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
           placeholder="Filtrar por SKU..."
           value={filtroSKU}
           onChange={(e) => setFiltroSKU(e.target.value)}
         />
 
         <input
-          className="border border-gray-300 rounded-md px-3 py-2"
+          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
           placeholder="Filtrar por Producto..."
           value={filtroProducto}
           onChange={(e) => setFiltroProducto(e.target.value)}
         />
 
         <select
-          className="border border-gray-300 rounded-md px-3 py-2"
+          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
           value={filtroCategoria}
           onChange={(e) => setFiltroCategoria(e.target.value)}
         >
@@ -137,26 +164,63 @@ async function cargar() {
             </option>
           ))}
         </select>
+
+        {/* FILTRO MARCA — react-select MULTI */}
+        <Select
+          isMulti
+          options={marcasDisponibles}
+          value={filtroMarcas}
+          onChange={(val) => setFiltroMarcas(val || [])}
+          placeholder="Filtrar por Marca..."
+          className="text-sm"
+          classNamePrefix="react-select"
+          styles={{
+            control: (base) => ({
+              ...base,
+              minHeight: "38px",
+              borderColor: "#d1d5db",
+            }),
+            menu: (base) => ({
+              ...base,
+              zIndex: 50, // 👈 clave para no quedar bajo el thead
+            }),
+          }}
+        />
       </div>
 
       {/* TABLA */}
       <div className="bg-white shadow border border-gray-300/30 rounded-xl overflow-y-auto max-h-[900px]">
         <table className="min-w-full divide-y divide-gray-300">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
                 SKU
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
                 Producto
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+                Marca
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
                 Categoría
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
                 Formato
               </th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700">
+              <th
+                className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none"
+                onClick={() =>
+                  setOrdenPrecio((prev) =>
+                    prev === "asc" ? "desc" : "asc"
+                  )
+                }
+              >
+                Precio Unitario{" "}
+                {ordenPrecio === "asc" && "▲"}
+                {ordenPrecio === "desc" && "▼"}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
                 Acción
               </th>
             </tr>
@@ -165,25 +229,29 @@ async function cargar() {
           <tbody className="divide-y divide-gray-200 bg-white">
             {productosFiltrados.map((p) => (
               <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">{p.sku}</td>
-                <td className="px-6 py-4">{p.nombre}</td>
-                <td className="px-6 py-4">{p.categoria}</td>
-                <td className="px-6 py-4">{p.formato}</td>
-
-                <td className="px-6 py-4 text-right flex gap-3 justify-end">
-                  <Link
-                    to={`/productos/editar/${p.id}`}
-                    className="px-4 py-1.5 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700"
-                  >
-                    Editar
-                  </Link>
-
-                  <button
-                    onClick={() => solicitarEliminacion(p)}
-                    className="px-4 py-1.5 bg-red-500 text-white rounded-md shadow hover:bg-red-600"
-                  >
-                    Eliminar
-                  </button>
+                <td className="px-6 py-3 text-sm">{p.sku}</td>
+                <td className="px-6 py-3 text-sm">{p.nombre}</td>
+                <td className="px-6 py-3 text-sm">{p.marca || "—"}</td>
+                <td className="px-6 py-3 text-sm">{p.categoria}</td>
+                <td className="px-6 py-3 text-sm">{p.formato}</td>
+                <td className="px-6 py-3 text-sm font-semibold">
+                  ${Number(p.lista1 ?? 0).toLocaleString("es-CL")}
+                </td>
+                <td className="px-6 py-3">
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/productos/editar/${p.id}`}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Editar
+                    </Link>
+                    <button
+                      onClick={() => solicitarEliminacion(p)}
+                      className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -191,8 +259,8 @@ async function cargar() {
             {productosFiltrados.length === 0 && (
               <tr>
                 <td
-                  colSpan="5"
-                  className="px-6 py-8 text-center text-gray-500"
+                  colSpan="7"
+                  className="px-6 py-8 text-center text-sm text-gray-500"
                 >
                   No hay productos que coincidan con el filtro.
                 </td>
@@ -202,11 +270,10 @@ async function cargar() {
         </table>
       </div>
 
-      {/* MODAL */}
       <ConfirmModal
         open={modalOpen}
         title="Confirmar eliminación"
-        message={`¿Seguro que deseas eliminar el producto "${productoAEliminar?.nombre}"? Esta acción no se puede deshacer.`}
+        message={`¿Seguro que deseas eliminar el producto "${productoAEliminar?.nombre}"?`}
         onCancel={() => setModalOpen(false)}
         onConfirm={eliminarDefinitivo}
       />

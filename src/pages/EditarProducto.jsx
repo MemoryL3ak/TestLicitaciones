@@ -13,12 +13,11 @@ export default function EditarProducto() {
     sku: "",
     estado: "",
     nombre: "",
+    marca: "", // ← NUEVO
     categoria: "",
     formato: "",
     lista1: 0,
     lista2: 0,
-    lista3: 0,
-    lista4: 0,
   });
 
   /* ============================================================
@@ -35,11 +34,7 @@ export default function EditarProducto() {
         .single();
 
       if (error || !data) {
-        console.error(error);
-        setToast({
-          type: "error",
-          message: "Error cargando producto",
-        });
+        setToast({ type: "error", message: "Error cargando producto" });
         setLoading(false);
         return;
       }
@@ -48,12 +43,11 @@ export default function EditarProducto() {
         sku: data.sku || "",
         estado: data.estado || (data.sku ? "Activo" : "Transitorio"),
         nombre: data.nombre,
+        marca: data.marca || "",
         categoria: data.categoria,
         formato: data.formato,
         lista1: data.lista1,
         lista2: data.lista2,
-        lista3: data.lista3,
-        lista4: data.lista4,
       });
 
       setLoading(false);
@@ -75,39 +69,28 @@ export default function EditarProducto() {
         sku: skuLimpio || null,
         estado: nuevoEstado,
         nombre: producto.nombre,
+        marca: producto.marca, // ← NUEVO
         categoria: producto.categoria,
         formato: producto.formato,
         lista1: Number(producto.lista1) || 0,
         lista2: Number(producto.lista2) || 0,
-        lista3: Number(producto.lista3) || 0,
-        lista4: Number(producto.lista4) || 0,
+        lista3: 0,
+        lista4: 0,
       })
       .eq("id", id);
 
     if (error) {
-      console.error(error);
-      setToast({
-        type: "error",
-        message: "Error al guardar cambios",
-      });
+      setToast({ type: "error", message: "Error al guardar cambios" });
       return;
     }
 
-    setToast({
-      type: "success",
-      message: "Producto actualizado",
-    });
+    setToast({ type: "success", message: "Producto actualizado" });
   }
-
-  /* ============================================================
-     UI
-  ============================================================ */
 
   if (loading) return <div className="p-6">Cargando...</div>;
 
   return (
     <div className="mx-auto max-w-4xl p-8">
-
       {toast && (
         <Toast
           type={toast.type}
@@ -129,8 +112,6 @@ export default function EditarProducto() {
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
         <div className="grid grid-cols-1 gap-6">
-
-          {/* ESTADO (solo lectura) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Estado
@@ -142,7 +123,6 @@ export default function EditarProducto() {
             />
           </div>
 
-          {/* SKU */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               SKU
@@ -150,19 +130,18 @@ export default function EditarProducto() {
             <input
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={producto.sku}
-              onChange={(e) => {
-                const nuevoSKU = e.target.value;
+              onChange={(e) =>
                 setProducto({
                   ...producto,
-                  sku: nuevoSKU,
-                  estado: nuevoSKU.trim() ? "Activo" : "Transitorio",
-                });
-              }}
-              placeholder="Ej: PH00001"
+                  sku: e.target.value,
+                  estado: e.target.value.trim()
+                    ? "Activo"
+                    : "Transitorio",
+                })
+              }
             />
           </div>
 
-          {/* Nombre */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre del Producto
@@ -176,7 +155,20 @@ export default function EditarProducto() {
             />
           </div>
 
-          {/* Categoría */}
+          {/* MARCA */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Marca
+            </label>
+            <input
+              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              value={producto.marca}
+              onChange={(e) =>
+                setProducto({ ...producto, marca: e.target.value })
+              }
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Categoría
@@ -190,7 +182,6 @@ export default function EditarProducto() {
             />
           </div>
 
-          {/* Formato */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Formato
@@ -204,24 +195,28 @@ export default function EditarProducto() {
             />
           </div>
 
-          {/* Listas de Precios */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">
               Listas de precios
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {["lista1", "lista2", "lista3", "lista4"].map((list) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {["lista1", "lista2"].map((list) => (
                 <div key={list}>
                   <label className="block text-sm text-gray-600 mb-1">
-                    {list.replace("lista", "Lista ")}
+                    {list === "lista1"
+                      ? "Listado de Precios 1"
+                      : "Listado de Precios 2"}
                   </label>
                   <input
                     type="number"
                     className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
                     value={producto[list]}
                     onChange={(e) =>
-                      setProducto({ ...producto, [list]: e.target.value })
+                      setProducto({
+                        ...producto,
+                        [list]: e.target.value,
+                      })
                     }
                   />
                 </div>
@@ -230,14 +225,20 @@ export default function EditarProducto() {
           </div>
         </div>
 
-        {/* BOTÓN GUARDAR */}
         <div className="mt-6">
-          <button
-            onClick={guardarCambios}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 cursor-pointer"
-          >
-            Guardar Cambios
-          </button>
+
+
+         <button
+  type="button"
+  onClick={guardarCambios}
+  className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
+             hover:bg-blue-700 transition-colors"
+>
+  Guardar Cambios
+</button>
+
+
+
         </div>
       </div>
     </div>

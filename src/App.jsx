@@ -2,26 +2,38 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
 
+// AUTH
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 
+// LICITACIONES
 import CrearLicitacion from "./pages/CrearLicitacion";
 import ListarLicitaciones from "./pages/ListarLicitaciones";
 import DetalleLicitacion from "./pages/DetalleLicitacion";
 
+// PRODUCTOS
 import Productos from "./pages/Productos";
 import CrearProducto from "./pages/CrearProducto";
 import EditarProducto from "./pages/EditarProducto";
 
+// CLIENTES
+import Clientes from "./pages/Clientes";
+import CrearCliente from "./pages/CrearCliente";
+import EditarCliente from "./pages/EditarCliente";
+
+/* ============================================================
+   WRAPPER PARA OCULTAR BANNER EN LOGIN / RESET
+============================================================ */
 function LayoutWrapper() {
   const location = useLocation();
+
   const hideUI =
     location.pathname === "/login" ||
     location.pathname === "/reset-password";
 
   return (
     <>
-      {/* 🔵 BANNER TAMAÑO INTERMEDIO */}
+      {/* BANNER SUPERIOR */}
       {!hideUI && (
         <div className="w-full bg-white flex justify-center py-6 shadow-md border-b border-gray-200">
           <img
@@ -33,11 +45,15 @@ function LayoutWrapper() {
       )}
 
       <Routes>
-        {/* PUBLIC */}
+        {/* =====================
+            RUTAS PÚBLICAS
+        ====================== */}
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* PROTECTED + SIDEBAR */}
+        {/* =====================
+            RUTAS PROTEGIDAS
+        ====================== */}
         <Route
           path="/"
           element={
@@ -46,21 +62,32 @@ function LayoutWrapper() {
             </ProtectedRoute>
           }
         >
+          {/* LICITACIONES */}
           <Route path="crear" element={<CrearLicitacion />} />
           <Route path="listar" element={<ListarLicitaciones />} />
           <Route path="detalle/:id" element={<DetalleLicitacion />} />
 
+          {/* PRODUCTOS */}
           <Route path="productos" element={<Productos />} />
           <Route path="productos/nuevo" element={<CrearProducto />} />
           <Route path="productos/editar/:id" element={<EditarProducto />} />
+
+          {/* CLIENTES */}
+          <Route path="clientes" element={<Clientes />} />
+          <Route path="clientes/nuevo" element={<CrearCliente />} />
+          <Route path="clientes/editar/:id" element={<EditarCliente />} />
         </Route>
 
+        {/* FALLBACK */}
         <Route path="*" element={<Login />} />
       </Routes>
     </>
   );
 }
 
+/* ============================================================
+   APP
+============================================================ */
 export default function App() {
   return (
     <BrowserRouter>

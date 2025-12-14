@@ -524,11 +524,8 @@ export default function CrearLicitacion() {
 const [tipoCompra, setTipoCompra] = useState("Compra ágil");
 const [region, setRegion] = useState("");
 const [comuna, setComuna] = useState("");
-
-
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
-
   const [items, setItems] = useState([
     {
       sku: "",
@@ -544,6 +541,40 @@ const [comuna, setComuna] = useState("");
   ]);
 
 const [hydrated, setHydrated] = useState(false);
+
+
+
+async function buscarClientePorRut(rut) {
+  if (!rut) return;
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("*")
+    .eq("rut", rut)
+    .single();
+
+  if (error || !data) {
+    // Cliente no existe → no hacemos nada
+    return;
+  }
+
+  // Cliente encontrado → autocompletar
+  setNombreEntidad(data.nombre || "");
+  setDepartamento(data.departamento || "");
+  setMunicipalidad(data.municipalidad || "");
+  setRegion(data.region || "");
+  setComuna(data.comuna || "");
+  setDireccion(data.direccion || "");
+  setContacto(data.contacto || "");
+  setEmail(data.email || "");
+  setTelefono(data.telefono || "");
+  setCondVenta(data.condiciones_venta || "");
+}
+
+
+
+
+
 
 
 
@@ -812,6 +843,101 @@ useEffect(() => {
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
   else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
+
+
+async function crearClienteSiNoExiste() {
+  if (!rutEntidad) return;
+
+  // 1️⃣ Verificar si existe
+  const { data: existe } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq("rut", rutEntidad)
+    .single();
+
+  // 2️⃣ Si existe → no hacemos nada
+  if (existe) return;
+
+  // 3️⃣ Si NO existe → crear cliente
+  const { error } = await supabase.from("clientes").insert([
+    {
+      rut: rutEntidad,
+      nombre: nombreEntidad,
+      departamento,
+      municipalidad,
+      region,
+      comuna,
+      direccion,
+      contacto,
+      email,
+      telefono,
+      condiciones_venta: condVenta,
+    },
+  ]);
+
+  if (error) {
+    console.error("Error creando cliente:", error);
+    throw new Error("No se pudo crear el cliente");
+  }
+}
+
+
+
+function limpiarDatos() {
+  // Datos licitación
+  setIdLicitacionInput("");
+  setNombre("");
+  setFechaHoraCierre("");
+  setMonto("");
+  setListado("1");
+
+  // Datos entidad
+  setRutEntidad("");
+  setNombreEntidad("");
+  setDepartamento("");
+  setMunicipalidad("");
+  setRegion("");
+  setComuna("");
+  setDireccion("");
+  setContacto("");
+  setEmail("");
+  setTelefono("");
+  setCondVenta("");
+
+  // Flete
+  setFleteEstimado(0);
+
+  // Ítems
+  setItems([
+    {
+      sku: "",
+      producto: "",
+      categoria: "",
+      formato: "",
+      cantidad: 0,
+      precio: 0,
+      total: 0,
+      observacion: "",
+      mostrarObs: false,
+    },
+  ]);
+
+  // Opcional: toast informativo
+  setToast({
+    type: "success",
+    message: "Los datos fueron limpiados correctamente.",
+  });
+}
+
+
+
+
+
+
+
+
+
+
   /* ============================================================
      GUARDAR LICITACIÓN
   ============================================================ */
@@ -832,6 +958,7 @@ if (!region) errores.push("Región");
 if (!comuna) errores.push("Comuna");
 
 
+
     if (errores.length > 0) {
       setToast({
         type: "error",
@@ -842,6 +969,18 @@ if (!comuna) errores.push("Comuna");
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
     const user = (await supabase.auth.getUser()).data.user;
+
+
+    try {
+  await crearClienteSiNoExiste();
+} catch (e) {
+  setToast({
+    type: "error",
+    message: "Error al guardar el cliente asociado.",
+  });
+  return;
+}
+
 
     const { data: lic, error } = await supabase
       .from("licitaciones")
@@ -1181,11 +1320,25 @@ setComuna("");
             <label className="block text-sm font-medium text-gray-700 mb-1">
               RUT *
             </label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={rutEntidad}
-              onChange={(e) => setRutEntidad(e.target.value)}
-            />
+
+
+
+
+
+         <input
+  className="w-full rounded-md border border-gray-300 px-3 py-2"
+  value={rutEntidad}
+  onChange={(e) => setRutEntidad(e.target.value)}
+  onBlur={() => buscarClientePorRut(rutEntidad)}
+/>
+
+
+
+            
+
+
+
+
           </div>
 
           <div>
@@ -1628,10 +1781,23 @@ setComuna("");
           + Agregar Ítem
         </button>
 
+
+  <button
+    type="button"
+    onClick={limpiarDatos}
+    className="cursor-pointer bg-gray-500 text-white px-6 py-2 rounded-md shadow hover:bg-gray-600 transition"
+  >
+    Limpiar Datos
+  </button>
+
+
+
         <button
           onClick={guardarLicitacion}
           className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
         >
+
+
           Guardar Licitación
         </button>
       </div>

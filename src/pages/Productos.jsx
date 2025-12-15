@@ -4,6 +4,26 @@ import { Link } from "react-router-dom";
 import ConfirmModal from "../components/ConfirmModal";
 import Select from "react-select";
 
+/* ============================================================
+   HELPERS FILTRO PRODUCTO (TOKENS + NORMALIZACIÓN)
+   - Permite buscar "caristo 10" y matchear "CARISTOPREVELADOR X 10 ML"
+============================================================ */
+function normalizarTexto(s = "") {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita tildes
+    .replace(/[^a-z0-9]+/g, " ") // deja letras/números, lo demás a espacio
+    .trim();
+}
+
+function contieneTodosLosTokens(texto, query) {
+  const t = normalizarTexto(texto);
+  const tokens = normalizarTexto(query).split(" ").filter(Boolean);
+  if (tokens.length === 0) return true; // si no hay filtro, no restringe
+  return tokens.every((tok) => t.includes(tok));
+}
+
 export default function Productos() {
   const [productos, setProductos] = useState([]);
 
@@ -46,12 +66,11 @@ export default function Productos() {
 
   /* ============================================================
      MARCAS DISPONIBLES (DINÁMICAS SEGÚN FILTRO PRODUCTO)
+     ✅ AHORA USA TOKENS (NO SUBSTRING CONTIGUA)
   ============================================================ */
   const marcasDisponibles = useMemo(() => {
     const marcas = productos
-      .filter((p) =>
-        p.nombre.toLowerCase().includes(filtroProducto.toLowerCase())
-      )
+      .filter((p) => contieneTodosLosTokens(p.nombre, filtroProducto))
       .map((p) => p.marca)
       .filter(Boolean);
 
@@ -67,12 +86,12 @@ export default function Productos() {
   const productosFiltrados = productos
     .filter((p) => {
       const matchSKU = p.sku.toLowerCase().includes(filtroSKU.toLowerCase());
-      const matchProducto = p.nombre
-        .toLowerCase()
-        .includes(filtroProducto.toLowerCase());
-      const matchCategoria = filtroCategoria
-        ? p.categoria === filtroCategoria
-        : true;
+
+      // ✅ AHORA USA TOKENS (NO SUBSTRING CONTIGUA)
+      const matchProducto = contieneTodosLosTokens(p.nombre, filtroProducto);
+
+      const matchCategoria = filtroCategoria ? p.categoria === filtroCategoria : true;
+
       const matchMarca =
         filtroMarcas.length > 0
           ? filtroMarcas.some((m) => m.value === p.marca)
@@ -92,9 +111,7 @@ export default function Productos() {
   ============================================================ */
   useEffect(() => {
     setFiltroMarcas((prev) =>
-      prev.filter((m) =>
-        marcasDisponibles.some((d) => d.value === m.value)
-      )
+      prev.filter((m) => marcasDisponibles.some((d) => d.value === m.value))
     );
   }, [marcasDisponibles]);
 
@@ -211,13 +228,10 @@ export default function Productos() {
               <th
                 className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none"
                 onClick={() =>
-                  setOrdenPrecio((prev) =>
-                    prev === "asc" ? "desc" : "asc"
-                  )
+                  setOrdenPrecio((prev) => (prev === "asc" ? "desc" : "asc"))
                 }
               >
-                Precio Unitario{" "}
-                {ordenPrecio === "asc" && "▲"}
+                Precio Unitario {ordenPrecio === "asc" && "▲"}
                 {ordenPrecio === "desc" && "▼"}
               </th>
               <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">

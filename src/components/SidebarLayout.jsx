@@ -2,6 +2,23 @@ import { Link, useLocation, Outlet } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useEffect, useState } from "react";
 
+const ROL_LABEL = {
+  admin: "Administrador",
+  jefe_ventas: "Jefe Ventas",
+  ventas: "Ventas",
+};
+
+function normalizarRol(r) {
+  const x = (r ?? "").toString().trim().toLowerCase();
+
+  if (x === "administrador") return "admin";
+  if (x === "jefe ventas" || x === "jefe_ventas") return "jefe_ventas";
+  if (x === "ventas") return "ventas";
+  if (x === "usuario") return "ventas"; // ajusta si quieres que "Usuario" sea otro rol
+
+  return r;
+}
+
 export default function SidebarLayout() {
   const location = useLocation();
   const [perfil, setPerfil] = useState(null);
@@ -26,9 +43,12 @@ export default function SidebarLayout() {
         .eq("email", user.email)
         .single();
 
+      const rolRaw = perfilDB?.rol || "usuario";
+      const rolNorm = normalizarRol(rolRaw);
+
       setPerfil({
         nombre: perfilDB?.nombre || user.email,
-        rol: perfilDB?.rol || "Usuario",
+        rol: rolNorm, // rol técnico
         email: user.email,
       });
     }
@@ -70,7 +90,6 @@ export default function SidebarLayout() {
             Productos
           </Link>
 
-          {/* 🔥 NUEVO: CLIENTES */}
           <Link
             to="/clientes"
             className={`block px-3 py-2 rounded-md transition ${isActive("/clientes")}`}
@@ -90,7 +109,9 @@ export default function SidebarLayout() {
                 <div className="font-semibold text-gray-900 text-sm">
                   Bienvenido, {perfil.nombre}
                 </div>
-                <div className="text-xs text-gray-500">{perfil.rol}</div>
+                <div className="text-xs text-gray-500">
+                  {ROL_LABEL[perfil.rol] ?? "Sin rol"}
+                </div>
               </div>
 
               <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-lg shadow">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import Select, { components } from "react-select";
@@ -44,6 +44,32 @@ function formatear(valor) {
 }
 
 /* ============================================================
+   BUSCADOR MEJORADO PARA REACT-SELECT
+   - Permite "caristo 10" y matchea "caristoprevelador x 10 ml"
+============================================================ */
+function normalizarTexto(str) {
+  return (str ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita tildes
+    .replace(/[^a-z0-9\s]/g, " ") // símbolos -> espacio
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function filtrarPorTerminos(option, inputValue) {
+  const q = normalizarTexto(inputValue);
+  if (!q) return true;
+
+  const label = normalizarTexto(option.label);
+  const terms = q.split(" ").filter(Boolean);
+
+  // Todas las palabras deben existir en el label (AND)
+  return terms.every((t) => label.includes(t));
+}
+
+/* ============================================================
    ESTILOS DEL SELECT
 ============================================================ */
 const customStyles = {
@@ -69,20 +95,14 @@ const customStyles = {
     fontSize: "13px",
     fontFamily: "inherit",
   }),
-option: (base, state) => ({
-  ...base,
-  fontSize: "13px",
-  fontFamily: "inherit",
-  background: state.isFocused
-    ? "#1A73E8"  // azul profundo tipo Tailwind blue-900
-    : "white",
-  color: state.isFocused ? "white" : "#333",
-  cursor: "pointer",
-}),
-
-
-
-
+  option: (base, state) => ({
+    ...base,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    background: state.isFocused ? "#1A73E8" : "white",
+    color: state.isFocused ? "white" : "#333",
+    cursor: "pointer",
+  }),
   placeholder: (base) => ({
     ...base,
     fontSize: "13px",
@@ -90,16 +110,9 @@ option: (base, state) => ({
   }),
 };
 
-
 const REGIONES_CHILE = {
-  "Arica y Parinacota": [
-    "Arica",
-    "Camarones",
-    "Putre",
-    "General Lagos",
-  ],
-
-  "Tarapacá": [
+  "Arica y Parinacota": ["Arica", "Camarones", "Putre", "General Lagos"],
+  Tarapacá: [
     "Iquique",
     "Alto Hospicio",
     "Pozo Almonte",
@@ -108,8 +121,7 @@ const REGIONES_CHILE = {
     "Huara",
     "Pica",
   ],
-
-  "Antofagasta": [
+  Antofagasta: [
     "Antofagasta",
     "Mejillones",
     "Sierra Gorda",
@@ -120,8 +132,7 @@ const REGIONES_CHILE = {
     "Tocopilla",
     "María Elena",
   ],
-
-  "Atacama": [
+  Atacama: [
     "Copiapó",
     "Caldera",
     "Tierra Amarilla",
@@ -132,8 +143,7 @@ const REGIONES_CHILE = {
     "Freirina",
     "Huasco",
   ],
-
-  "Coquimbo": [
+  Coquimbo: [
     "La Serena",
     "Coquimbo",
     "Andacollo",
@@ -150,8 +160,7 @@ const REGIONES_CHILE = {
     "Punitaqui",
     "Río Hurtado",
   ],
-
-  "Valparaíso": [
+  Valparaíso: [
     "Valparaíso",
     "Casablanca",
     "Concón",
@@ -191,7 +200,6 @@ const REGIONES_CHILE = {
     "Olmué",
     "Villa Alemana",
   ],
-
   "Metropolitana de Santiago": [
     "Cerrillos",
     "Cerro Navia",
@@ -246,7 +254,6 @@ const REGIONES_CHILE = {
     "Padre Hurtado",
     "Peñaflor",
   ],
-
   "O'Higgins": [
     "Rancagua",
     "Codegua",
@@ -282,8 +289,7 @@ const REGIONES_CHILE = {
     "Pumanque",
     "Santa Cruz",
   ],
-
-  "Maule": [
+  Maule: [
     "Talca",
     "Constitución",
     "Curepto",
@@ -315,8 +321,7 @@ const REGIONES_CHILE = {
     "Villa Alegre",
     "Yerbas Buenas",
   ],
-
-  "Ñuble": [
+  Ñuble: [
     "Chillán",
     "Bulnes",
     "Chillán Viejo",
@@ -338,8 +343,7 @@ const REGIONES_CHILE = {
     "San Fabián",
     "San Nicolás",
   ],
-
-  "Biobío": [
+  Biobío: [
     "Concepción",
     "Coronel",
     "Chiguayante",
@@ -374,7 +378,6 @@ const REGIONES_CHILE = {
     "Yumbel",
     "Alto Biobío",
   ],
-
   "La Araucanía": [
     "Temuco",
     "Carahue",
@@ -409,7 +412,6 @@ const REGIONES_CHILE = {
     "Traiguén",
     "Victoria",
   ],
-
   "Los Ríos": [
     "Valdivia",
     "Corral",
@@ -424,7 +426,6 @@ const REGIONES_CHILE = {
     "Lago Ranco",
     "Río Bueno",
   ],
-
   "Los Lagos": [
     "Puerto Montt",
     "Calbuco",
@@ -453,8 +454,7 @@ const REGIONES_CHILE = {
     "San Juan de la Costa",
     "San Pablo",
   ],
-
-  "Aysén": [
+  Aysén: [
     "Coyhaique",
     "Lago Verde",
     "Aysén",
@@ -466,7 +466,6 @@ const REGIONES_CHILE = {
     "Chile Chico",
     "Río Ibáñez",
   ],
-
   "Magallanes y de la Antártica Chilena": [
     "Punta Arenas",
     "Laguna Blanca",
@@ -482,16 +481,11 @@ const REGIONES_CHILE = {
   ],
 };
 
-
-
 const STORAGE_KEY = "crear_licitacion_draft";
-
-
 
 /* ============================================================
    COMPONENTE PRINCIPAL
 ============================================================ */
-
 export default function CrearLicitacion() {
   const [tooltip, setTooltip] = useState({
     visible: false,
@@ -500,8 +494,50 @@ export default function CrearLicitacion() {
     y: 0,
   });
 
+  /* ============================================================
+     PERFIL / ROL (RLS)
+  ============================================================ */
+  const [perfilLoading, setPerfilLoading] = useState(true);
+  const [rol, setRol] = useState(null); // 'admin' | 'jefe_ventas' | 'ventas'
+  const [perfilNombre, setPerfilNombre] = useState("");
 
+  useEffect(() => {
+    async function cargarPerfil() {
+      setPerfilLoading(true);
 
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      const user = userData?.user;
+
+      if (userErr || !user) {
+        setRol(null);
+        setPerfilNombre("");
+        setPerfilLoading(false);
+        return;
+      }
+
+      const { data: perfil, error: perfilErr } = await supabase
+        .from("profiles")
+        .select("rol, nombre")
+        .eq("id", user.id)
+        .single();
+
+      if (perfilErr || !perfil) {
+        setRol(null);
+        setPerfilNombre("");
+      } else {
+        setRol(perfil.rol || null);
+        setPerfilNombre(perfil.nombre || "");
+      }
+
+      setPerfilLoading(false);
+    }
+
+    cargarPerfil();
+  }, []);
+
+  const puedeCrearLicitacion = useMemo(() => {
+    return ["admin", "jefe_ventas", "ventas"].includes(rol);
+  }, [rol]);
 
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
@@ -521,11 +557,13 @@ export default function CrearLicitacion() {
   const [telefono, setTelefono] = useState("");
   const [condVenta, setCondVenta] = useState("");
   const [fleteEstimado, setFleteEstimado] = useState(0);
-const [tipoCompra, setTipoCompra] = useState("Compra ágil");
-const [region, setRegion] = useState("");
-const [comuna, setComuna] = useState("");
+  const [tipoCompra, setTipoCompra] = useState("Compra ágil");
+  const [region, setRegion] = useState("");
+  const [comuna, setComuna] = useState("");
+
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
+
   const [items, setItems] = useState([
     {
       sku: "",
@@ -540,88 +578,101 @@ const [comuna, setComuna] = useState("");
     },
   ]);
 
-const [hydrated, setHydrated] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
+  async function buscarClientePorRut(rut) {
+    if (!rut) return;
 
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("rut", rut)
+      .single();
 
-async function buscarClientePorRut(rut) {
-  if (!rut) return;
+    if (error || !data) return;
 
-  const { data, error } = await supabase
-    .from("clientes")
-    .select("*")
-    .eq("rut", rut)
-    .single();
-
-  if (error || !data) {
-    // Cliente no existe → no hacemos nada
-    return;
-  }
-
-  // Cliente encontrado → autocompletar
-  setNombreEntidad(data.nombre || "");
-  setDepartamento(data.departamento || "");
-  setMunicipalidad(data.municipalidad || "");
-  setRegion(data.region || "");
-  setComuna(data.comuna || "");
-  setDireccion(data.direccion || "");
-  setContacto(data.contacto || "");
-  setEmail(data.email || "");
-  setTelefono(data.telefono || "");
-  setCondVenta(data.condiciones_venta || "");
-}
-
-
-
-
-
-
-
-
-
-useEffect(() => {
-  const guardado = localStorage.getItem(STORAGE_KEY);
-  if (!guardado) return;
-
-  try {
-    const data = JSON.parse(guardado);
-
-    setIdLicitacionInput(data.idLicitacionInput || "");
-    setNombre(data.nombre || "");
-    setFechaHoraCierre(data.fechaHoraCierre || "");
-    setMonto(data.monto || "");
-    setListado(data.listado || "1");
-
-    setRutEntidad(data.rutEntidad || "");
-    setNombreEntidad(data.nombreEntidad || "");
+    setNombreEntidad(data.nombre || "");
     setDepartamento(data.departamento || "");
     setMunicipalidad(data.municipalidad || "");
+    setRegion(data.region || "");
+    setComuna(data.comuna || "");
     setDireccion(data.direccion || "");
     setContacto(data.contacto || "");
     setEmail(data.email || "");
     setTelefono(data.telefono || "");
-    setCondVenta(data.condVenta || "");
-
-    setFleteEstimado(data.fleteEstimado || 0);
-    setTipoCompra(data.tipoCompra || "Compra ágil");
-    setRegion(data.region || "");
-    setComuna(data.comuna || "");
-
-    setItems(data.items || []);
-   } catch (e) {
-    console.error("Error cargando borrador de licitación", e);
-  } finally {
-    setHydrated(true);
+    setCondVenta(data.condiciones_venta || "");
   }
-}, []);
 
+  /* ============================================================
+     CARGAR BORRADOR
+  ============================================================ */
+  useEffect(() => {
+    const guardado = localStorage.getItem(STORAGE_KEY);
+    if (!guardado) return;
 
+    try {
+      const data = JSON.parse(guardado);
 
+      setIdLicitacionInput(data.idLicitacionInput || "");
+      setNombre(data.nombre || "");
+      setFechaHoraCierre(data.fechaHoraCierre || "");
+      setMonto(data.monto || "");
+      setListado(data.listado || "1");
 
-useEffect(() => {
-  if (!hydrated) return;
+      setRutEntidad(data.rutEntidad || "");
+      setNombreEntidad(data.nombreEntidad || "");
+      setDepartamento(data.departamento || "");
+      setMunicipalidad(data.municipalidad || "");
+      setDireccion(data.direccion || "");
+      setContacto(data.contacto || "");
+      setEmail(data.email || "");
+      setTelefono(data.telefono || "");
+      setCondVenta(data.condVenta || "");
 
-  const data = {
+      setFleteEstimado(data.fleteEstimado || 0);
+      setTipoCompra(data.tipoCompra || "Compra ágil");
+      setRegion(data.region || "");
+      setComuna(data.comuna || "");
+
+      setItems(data.items || []);
+    } catch (e) {
+      console.error("Error cargando borrador de licitación", e);
+    } finally {
+      setHydrated(true);
+    }
+  }, []);
+
+  /* ============================================================
+     GUARDAR BORRADOR
+  ============================================================ */
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const data = {
+      idLicitacionInput,
+      nombre,
+      fechaHoraCierre,
+      monto,
+      listado,
+      rutEntidad,
+      nombreEntidad,
+      departamento,
+      municipalidad,
+      direccion,
+      contacto,
+      email,
+      telefono,
+      condVenta,
+      fleteEstimado,
+      tipoCompra,
+      region,
+      comuna,
+      items,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [
+    hydrated,
     idLicitacionInput,
     nombre,
     fechaHoraCierre,
@@ -641,35 +692,7 @@ useEffect(() => {
     region,
     comuna,
     items,
-  };
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}, [
-  hydrated,
-  idLicitacionInput,
-  nombre,
-  fechaHoraCierre,
-  monto,
-  listado,
-  rutEntidad,
-  nombreEntidad,
-  departamento,
-  municipalidad,
-  direccion,
-  contacto,
-  email,
-  telefono,
-  condVenta,
-  fleteEstimado,
-  tipoCompra,
-  region,
-  comuna,
-  items,
-]);
-
-
-
-
+  ]);
 
   /* ============================================================
      CARGA DE PRODUCTOS
@@ -697,20 +720,17 @@ useEffect(() => {
       const prod = productos.find((p) => p.sku === it.sku);
       if (!prod) return it;
 
-const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
-const precio = Number(prod[listaValida] ?? 0);
+      const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
+      const precio = Number(prod[listaValida] ?? 0);
 
-    const precioConFlete = precio + fletePorUnidad;
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioConFlete = precio + fletePorUnidad;
 
-return {
-  ...it,
-  precio,
-  total: redondear(it.cantidad * precioConFlete),
-};
-
-
-
-      
+      return {
+        ...it,
+        precio,
+        total: redondear(cantidad * precioConFlete),
+      };
     });
 
     setItems(copia);
@@ -738,12 +758,10 @@ return {
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
+    const precioBase = Number(item.precio || 0);
+    const precioConFlete = precioBase + fletePorUnidad;
 
-const precioBase = Number(item.precio || 0);
-const precioConFlete = precioBase + fletePorUnidad;
-
-item.total = redondear(cantidad * precioConFlete);
-
+    item.total = redondear(cantidad * precioConFlete);
 
     copia[index] = item;
     setItems(copia);
@@ -786,49 +804,36 @@ item.total = redondear(cantidad * precioConFlete);
      RESUMEN
   ============================================================ */
   const cantidadProductos = items.reduce(
-  (acc, it) => acc + Number(it.cantidad || 0),
-  0
-);
+    (acc, it) => acc + Number(it.cantidad || 0),
+    0
+  );
 
-const fletePorUnidad =
-  cantidadProductos > 0
-    ? redondear(Number(fleteEstimado) / cantidadProductos)
-    : 0;
+  const fletePorUnidad =
+    cantidadProductos > 0
+      ? redondear(Number(fleteEstimado) / cantidadProductos)
+      : 0;
 
+  useEffect(() => {
+    if (!hydrated) return;
 
+    const copia = items.map((it) => {
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioBase = Number(it.precio || 0);
+      const precioConFlete = precioBase + fletePorUnidad;
 
+      return {
+        ...it,
+        total: redondear(cantidad * precioConFlete),
+      };
+    });
 
-
-useEffect(() => {
-  if (!hydrated) return;
-
-  const copia = items.map((it) => {
-    const cantidad = Math.max(1, Number(it.cantidad || 1));
-    const precioBase = Number(it.precio || 0);
-    const precioConFlete = precioBase + fletePorUnidad;
-
-    return {
-      ...it,
-      total: redondear(cantidad * precioConFlete),
-    };
-  });
-
-  setItems(copia);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [fletePorUnidad, hydrated]);
-
-
-
-
-
-
+    setItems(copia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fletePorUnidad, hydrated]);
 
   const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-
-
   const totalIVA = Math.round(total * 0.19);
   const totalNeto = total - totalIVA;
-
   const totalConIVA = total;
 
   let porcentajePresupuesto = 0;
@@ -843,106 +848,93 @@ useEffect(() => {
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
   else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
+  async function crearClienteSiNoExiste() {
+    if (!rutEntidad) return;
 
+    const { data: existe } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("rut", rutEntidad)
+      .single();
 
-async function crearClienteSiNoExiste() {
-  if (!rutEntidad) return;
+    if (existe) return;
 
-  // 1️⃣ Verificar si existe
-  const { data: existe } = await supabase
-    .from("clientes")
-    .select("id")
-    .eq("rut", rutEntidad)
-    .single();
+    const { error } = await supabase.from("clientes").insert([
+      {
+        rut: rutEntidad,
+        nombre: nombreEntidad,
+        departamento,
+        municipalidad,
+        region,
+        comuna,
+        direccion,
+        contacto,
+        email,
+        telefono,
+        condiciones_venta: condVenta,
+      },
+    ]);
 
-  // 2️⃣ Si existe → no hacemos nada
-  if (existe) return;
-
-  // 3️⃣ Si NO existe → crear cliente
-  const { error } = await supabase.from("clientes").insert([
-    {
-      rut: rutEntidad,
-      nombre: nombreEntidad,
-      departamento,
-      municipalidad,
-      region,
-      comuna,
-      direccion,
-      contacto,
-      email,
-      telefono,
-      condiciones_venta: condVenta,
-    },
-  ]);
-
-  if (error) {
-    console.error("Error creando cliente:", error);
-    throw new Error("No se pudo crear el cliente");
+    if (error) {
+      console.error("Error creando cliente:", error);
+      throw new Error("No se pudo crear el cliente");
+    }
   }
-}
 
+  function limpiarDatos() {
+    setIdLicitacionInput("");
+    setNombre("");
+    setFechaHoraCierre("");
+    setMonto("");
+    setListado("1");
 
+    setRutEntidad("");
+    setNombreEntidad("");
+    setDepartamento("");
+    setMunicipalidad("");
+    setRegion("");
+    setComuna("");
+    setDireccion("");
+    setContacto("");
+    setEmail("");
+    setTelefono("");
+    setCondVenta("");
 
-function limpiarDatos() {
-  // Datos licitación
-  setIdLicitacionInput("");
-  setNombre("");
-  setFechaHoraCierre("");
-  setMonto("");
-  setListado("1");
+    setFleteEstimado(0);
 
-  // Datos entidad
-  setRutEntidad("");
-  setNombreEntidad("");
-  setDepartamento("");
-  setMunicipalidad("");
-  setRegion("");
-  setComuna("");
-  setDireccion("");
-  setContacto("");
-  setEmail("");
-  setTelefono("");
-  setCondVenta("");
+    setItems([
+      {
+        sku: "",
+        producto: "",
+        categoria: "",
+        formato: "",
+        cantidad: 0,
+        precio: 0,
+        total: 0,
+        observacion: "",
+        mostrarObs: false,
+      },
+    ]);
 
-  // Flete
-  setFleteEstimado(0);
-
-  // Ítems
-  setItems([
-    {
-      sku: "",
-      producto: "",
-      categoria: "",
-      formato: "",
-      cantidad: 0,
-      precio: 0,
-      total: 0,
-      observacion: "",
-      mostrarObs: false,
-    },
-  ]);
-
-  // Opcional: toast informativo
-  setToast({
-    type: "success",
-    message: "Los datos fueron limpiados correctamente.",
-  });
-}
-
-
-
-
-
-
-
-
-
+    setToast({
+      type: "success",
+      message: "Los datos fueron limpiados correctamente.",
+    });
+  }
 
   /* ============================================================
      GUARDAR LICITACIÓN
   ============================================================ */
   async function guardarLicitacion() {
     setToast(null);
+
+    if (!puedeCrearLicitacion) {
+      setToast({
+        type: "error",
+        message: "No tienes permisos para crear licitaciones.",
+      });
+      return;
+    }
 
     const errores = [];
     if (!idLicitacionInput) errores.push("ID Licitación");
@@ -954,10 +946,8 @@ function limpiarDatos() {
     if (!departamento) errores.push("Departamento");
     if (!municipalidad) errores.push("Municipalidad");
     if (!tipoCompra) errores.push("Tipo de Compra");
-if (!region) errores.push("Región");
-if (!comuna) errores.push("Comuna");
-
-
+    if (!region) errores.push("Región");
+    if (!comuna) errores.push("Comuna");
 
     if (errores.length > 0) {
       setToast({
@@ -968,20 +958,26 @@ if (!comuna) errores.push("Comuna");
     }
 
     const fechaHoy = new Date().toISOString().slice(0, 10);
-    const user = (await supabase.auth.getUser()).data.user;
 
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    const user = userData?.user;
+
+    if (userErr || !user) {
+      setToast({ type: "error", message: "Sesión no válida. Vuelve a iniciar." });
+      return;
+    }
 
     try {
-  await crearClienteSiNoExiste();
-} catch (e) {
-  setToast({
-    type: "error",
-    message: "Error al guardar el cliente asociado.",
-  });
-  return;
-}
+      await crearClienteSiNoExiste();
+    } catch (e) {
+      setToast({
+        type: "error",
+        message: "Error al guardar el cliente asociado.",
+      });
+      return;
+    }
 
-
+    // ✅ created_by para RLS (y dejo creado_por si tu columna existe)
     const { data: lic, error } = await supabase
       .from("licitaciones")
       .insert([
@@ -993,31 +989,34 @@ if (!comuna) errores.push("Comuna");
           lista_precios: Number(listado),
 
           rut_entidad: rutEntidad,
-      nombre_entidad: nombreEntidad,
+          nombre_entidad: nombreEntidad,
           departamento,
           municipalidad,
           direccion,
           tipo_compra: tipoCompra,
-region,
-comuna,
+          region,
+          comuna,
           contacto,
           email,
           telefono,
           condicion_venta: condVenta,
 
           fecha: fechaHoy,
-          creado_por: user.email,
+          creado_por: user.email, // si existe en tu tabla
           estado: "En espera",
 
           total_con_iva: totalConIVA,
           total_sin_iva: totalNeto,
           total_iva: totalIVA,
+
+          created_by: user.id, // ✅ clave para RLS
         },
       ])
       .select("id")
       .single();
 
     if (error) {
+      console.error(error);
       setToast({ type: "error", message: "Error al guardar licitación" });
       return;
     }
@@ -1032,7 +1031,6 @@ comuna,
           formato: it.formato,
           cantidad: Number(it.cantidad),
           valor_unitario: Number(it.precio) + fletePorUnidad,
-
           sku: it.sku,
           total: Number(it.total),
           categoria: it.categoria,
@@ -1046,7 +1044,7 @@ comuna,
       fecha_emision: fechaHoy,
 
       nombre_entidad: nombreEntidad,
-  rut_entidad: rutEntidad,
+      rut_entidad: rutEntidad,
       direccion,
       comuna,
       contacto,
@@ -1063,7 +1061,6 @@ comuna,
               <td>${it.formato}</td>
               <td>${it.cantidad}</td>
               <td>$ ${formatear(Number(it.precio) + fletePorUnidad)}</td>
-
               <td>$ ${formatear(it.total)}</td>
             </tr>
           `;
@@ -1088,45 +1085,14 @@ comuna,
     });
 
     setToast({
-  type: "success",
-  message: `La licitación "${nombre}" fue creada correctamente.`,
-});
+      type: "success",
+      message: `La licitación "${nombre}" fue creada correctamente.`,
+    });
 
-localStorage.removeItem(STORAGE_KEY);
-
+    localStorage.removeItem(STORAGE_KEY);
 
     // Reset
-    setIdLicitacionInput("");
-    setNombre("");
-    setFechaHoraCierre("");
-    setMonto("");
-    setListado("1");
-    setRutEntidad("");
-    setNombreEntidad("");
-    setDepartamento("");
-    setMunicipalidad("");
-    setDireccion("");
-setRegion("");
-setComuna("");
-
-    setContacto("");
-    setEmail("");
-    setTelefono("");
-    setCondVenta("");
-
-    setItems([
-      {
-        sku: "",
-        producto: "",
-        categoria: "",
-        formato: "",
-        cantidad: 0,
-        precio: 0,
-        total: 0,
-        observacion: "",
-        mostrarObs: false,
-      },
-    ]);
+    limpiarDatos();
   }
 
   /* ============================================================
@@ -1145,9 +1111,31 @@ setComuna("");
   /* ============================================================
      UI
   ============================================================ */
+  if (perfilLoading) {
+    return <div className="p-8 text-gray-600">Cargando perfil…</div>;
+  }
+
+  if (!puedeCrearLicitacion) {
+    return (
+      <div className="p-8">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+            Acceso restringido
+          </h1>
+          <p className="text-sm text-gray-700">
+            Tu usuario no tiene permisos para crear licitaciones.
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            Rol detectado: <b>{rol ?? "sin rol"}</b>{" "}
+            {perfilNombre ? `(${perfilNombre})` : ""}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto p-8">
-
       {/* Tooltip Animado Azul */}
       {tooltip.visible && (
         <div
@@ -1165,9 +1153,7 @@ setComuna("");
             whiteSpace: "nowrap",
             pointerEvents: "none",
             opacity: tooltip.visible ? 1 : 0,
-            transform: tooltip.visible
-              ? "translateY(0px)"
-              : "translateY(-6px)",
+            transform: tooltip.visible ? "translateY(0px)" : "translateY(-6px)",
             transition: "opacity 0.15s ease, transform 0.15s ease",
           }}
         >
@@ -1196,7 +1182,6 @@ setComuna("");
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
           {/* ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1262,35 +1247,26 @@ setComuna("");
             >
               <option value="1">Lista 1</option>
               <option value="2">Lista 2</option>
-            
             </select>
           </div>
 
- {/* TIPO DE COMPRA */}
-
-      <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Tipo de Compra *
-  </label>
-  <select
-    className="w-full rounded-md border border-gray-300 px-3 py-2"
-    value={tipoCompra}
-    onChange={(e) => setTipoCompra(e.target.value)}
-  >
-    <option value="Compra ágil">Compra ágil</option>
-    <option value="Compra directa">Compra directa</option>
-    <option value="Licitación">Licitación</option>
-  </select>
-</div>
-
-
-
-
+          {/* TIPO DE COMPRA */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo de Compra *
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={tipoCompra}
+              onChange={(e) => setTipoCompra(e.target.value)}
+            >
+              <option value="Compra ágil">Compra ágil</option>
+              <option value="Compra directa">Compra directa</option>
+              <option value="Licitación">Licitación</option>
+            </select>
+          </div>
         </div>
       </div>
-
-
-
 
       {/* ============================================================
           DATOS ENTIDAD
@@ -1314,31 +1290,18 @@ setComuna("");
         }`}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-          {/* CAMPOS */}
+          {/* RUT */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               RUT *
             </label>
 
-
-
-
-
-         <input
-  className="w-full rounded-md border border-gray-300 px-3 py-2"
-  value={rutEntidad}
-  onChange={(e) => setRutEntidad(e.target.value)}
-  onBlur={() => buscarClientePorRut(rutEntidad)}
-/>
-
-
-
-            
-
-
-
-
+            <input
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={rutEntidad}
+              onChange={(e) => setRutEntidad(e.target.value)}
+              onBlur={() => buscarClientePorRut(rutEntidad)}
+            />
           </div>
 
           <div>
@@ -1374,59 +1337,48 @@ setComuna("");
             />
           </div>
 
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Región *
-  </label>
-  <select
-    className="w-full rounded-md border border-gray-300 px-3 py-2"
-    value={region}
-    onChange={(e) => {
-      setRegion(e.target.value);
-      setComuna("");
-    }}
-  >
-    <option value="">Seleccione región</option>
-    {Object.keys(REGIONES_CHILE).map((reg) => (
-      <option key={reg} value={reg}>
-        {reg}
-      </option>
-    ))}
-  </select>
-</div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Región *
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={region}
+              onChange={(e) => {
+                setRegion(e.target.value);
+                setComuna("");
+              }}
+            >
+              <option value="">Seleccione región</option>
+              {Object.keys(REGIONES_CHILE).map((reg) => (
+                <option key={reg} value={reg}>
+                  {reg}
+                </option>
+              ))}
+            </select>
+          </div>
 
-
-
-
-
-    <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Comuna *
-  </label>
-  <select
-    className="w-full rounded-md border border-gray-300 px-3 py-2"
-    value={comuna}
-    onChange={(e) => setComuna(e.target.value)}
-    disabled={!region}
-  >
-    <option value="">
-      {region ? "Seleccione comuna" : "Seleccione región primero"}
-    </option>
-
-    {region &&
-      REGIONES_CHILE[region]?.map((c) => (
-        <option key={c} value={c}>
-          {c}
-        </option>
-      ))}
-  </select>
-</div>
-
-
-
-
-
-
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Comuna *
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={comuna}
+              onChange={(e) => setComuna(e.target.value)}
+              disabled={!region}
+            >
+              <option value="">
+                {region ? "Seleccione comuna" : "Seleccione región primero"}
+              </option>
+              {region &&
+                REGIONES_CHILE[region]?.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+            </select>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1438,15 +1390,6 @@ setComuna("");
               onChange={(e) => setDireccion(e.target.value)}
             />
           </div>
-
-
-
-
-
-
-
-
-
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1497,7 +1440,7 @@ setComuna("");
 
       {/* ============================================================
           ÍTEMS
-============================================================ */}
+      ============================================================ */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">Ítems</h2>
 
       <div className="space-y-6 max-h-[480px] overflow-y-auto overflow-x-auto pr-2">
@@ -1507,7 +1450,6 @@ setComuna("");
             className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3"
           >
             <div className="grid grid-cols-1 md:grid-cols-18 gap-4 items-end">
-
               {/* SKU */}
               <div className="md:col-span-2">
                 <label className="block text-xs text-gray-600 mb-1">SKU</label>
@@ -1518,6 +1460,7 @@ setComuna("");
                   placeholder="Seleccione SKU…"
                   menuPortalTarget={document.body}
                   isSearchable={true}
+                  filterOption={filtrarPorTerminos} // ✅ FIX búsquedas tipo "abc 10"
                   value={opcionesSKU.find((o) => o.value === it.sku) || null}
                   onChange={(op) =>
                     actualizarItem(index, "sku", op ? op.value : "")
@@ -1537,6 +1480,7 @@ setComuna("");
                   placeholder="Seleccione producto…"
                   menuPortalTarget={document.body}
                   isSearchable={true}
+                  filterOption={filtrarPorTerminos} // ✅ FIX búsquedas tipo "caristo 10"
                   value={
                     opcionesProducto.find((o) => o.value === it.producto) ||
                     null
@@ -1545,7 +1489,7 @@ setComuna("");
                     actualizarItem(index, "producto", op ? op.value : "")
                   }
                   components={{ SingleValue: ProductoSingleValue }}
-                  selectProps={{ setTooltip }}
+setTooltip={setTooltip}
                 />
               </div>
 
@@ -1587,10 +1531,7 @@ setComuna("");
                   value={it.cantidad}
                   onInput={(e) => {
                     e.target.value = e.target.value.replace(/[^0-9]/g, "");
-                    if (
-                      e.target.value === "" ||
-                      Number(e.target.value) <= 0
-                    ) {
+                    if (e.target.value === "" || Number(e.target.value) <= 0) {
                       e.target.value = "1";
                     }
                   }}
@@ -1600,30 +1541,19 @@ setComuna("");
                 />
               </div>
 
-
-
-            {/* PRECIO UNITARIO (BASE + FLETE) */}
-<div className="md:col-span-2">
-  <label className="block text-xs text-gray-600 mb-1">
-    Precio Unitario
-  </label>
-  <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
-    $
-    {(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
-  </div>
-</div>
-
-
-
-
-
-
+              {/* PRECIO UNITARIO */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">
+                  Precio Unitario
+                </label>
+                <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
+                  ${(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
+                </div>
+              </div>
 
               {/* TOTAL */}
               <div className="md:col-span-1">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Total
-                </label>
+                <label className="block text-xs text-gray-600 mb-1">Total</label>
                 <div className="h-10 flex items-center font-semibold">
                   ${Number(it.total).toLocaleString("es-CL")}
                 </div>
@@ -1673,106 +1603,92 @@ setComuna("");
         ))}
       </div>
 
-{/* ============================================================
-    RESUMEN
-============================================================ */}
-<div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
-  <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
+      {/* ============================================================
+          RESUMEN
+      ============================================================ */}
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
-  {/* FILA SUPERIOR */}
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Cantidad de Productos
-      </label>
-      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-        {cantidadProductos}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cantidad de Productos
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+              {cantidadProductos}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Flete Estimado
+            </label>
+            <input
+              type="number"
+              className="w-full h-10 rounded-md border border-gray-300 px-3"
+              value={fleteEstimado}
+              onChange={(e) => setFleteEstimado(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Flete por Unidad
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+              ${fletePorUnidad.toLocaleString("es-CL")}
+            </div>
+          </div>
+
+          <div></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Neto
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+              ${totalNeto.toLocaleString("es-CL")}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              IVA 19%
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+              ${totalIVA.toLocaleString("es-CL")}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Total
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+              ${totalConIVA.toLocaleString("es-CL")}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              % Presupuesto
+            </label>
+            <div
+              className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
+            >
+              {porcentajePresupuesto > 0
+                ? porcentajePresupuesto.toFixed(2) + "%"
+                : "0%"}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Flete Estimado
-      </label>
-      <input
-        type="number"
-        className="w-full h-10 rounded-md border border-gray-300 px-3"
-        value={fleteEstimado}
-        onChange={(e) => setFleteEstimado(e.target.value)}
-      />
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Flete por Unidad
-      </label>
-      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-        ${fletePorUnidad.toLocaleString("es-CL")}
-      </div>
-    </div>
-
-    <div></div>
-  </div>
-
-  {/* FILA INFERIOR */}
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Neto
-      </label>
-      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-        ${totalNeto.toLocaleString("es-CL")}
-      </div>
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        IVA 19%
-      </label>
-      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-        ${totalIVA.toLocaleString("es-CL")}
-      </div>
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Total
-      </label>
-      <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-        ${totalConIVA.toLocaleString("es-CL")}
-      </div>
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        % Presupuesto
-      </label>
-      <div
-        className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
-      >
-        {porcentajePresupuesto > 0
-          ? porcentajePresupuesto.toFixed(2) + "%"
-          : "0%"}
-      </div>
-    </div>
-  </div>
-</div>
-
-
-
-
-
-
-
-
-
-
-
-
 
       {/* ============================================================
           BOTONES
-============================================================ */}
+      ============================================================ */}
       <div className="flex gap-4 mt-6">
         <button
           onClick={agregarItem}
@@ -1781,23 +1697,18 @@ setComuna("");
           + Agregar Ítem
         </button>
 
-
-  <button
-    type="button"
-    onClick={limpiarDatos}
-    className="cursor-pointer bg-gray-500 text-white px-6 py-2 rounded-md shadow hover:bg-gray-600 transition"
-  >
-    Limpiar Datos
-  </button>
-
-
+        <button
+          type="button"
+          onClick={limpiarDatos}
+          className="cursor-pointer bg-gray-500 text-white px-6 py-2 rounded-md shadow hover:bg-gray-600 transition"
+        >
+          Limpiar Datos
+        </button>
 
         <button
           onClick={guardarLicitacion}
           className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
         >
-
-
           Guardar Licitación
         </button>
       </div>

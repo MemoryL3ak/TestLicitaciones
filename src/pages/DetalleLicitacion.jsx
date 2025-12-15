@@ -93,7 +93,9 @@ const estadoStyles = {
   "Adjudicada": "bg-green-50 text-green-800 border-green-300",
   "Perdida": "bg-red-50 text-red-800 border-red-300",
   "Desierta": "bg-gray-100 text-gray-700 border-gray-300",
+  "Descartada": "bg-purple-50 text-purple-800 border-purple-300",
 };
+
 
 /* ============================================================
    REGIONES / COMUNAS (OBJETO COMPLETO)
@@ -1344,16 +1346,23 @@ function volver() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Estado
             </label>
-            <select
-              className={`w-full rounded-md border px-3 py-2 ${estadoStyles[estado] || ""}`}
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
-            >
-              <option value="En espera">En espera</option>
-              <option value="Adjudicada">Adjudicada</option>
-              <option value="Perdida">Perdida</option>
-              <option value="Desierta">Desierta</option>
-            </select>
+
+<select
+  className={`w-full rounded-md border px-3 py-2 ${estadoStyles[estado] || ""}`}
+  value={estado}
+  onChange={(e) => setEstado(e.target.value)}
+>
+  <option value="En espera">En espera</option>
+  <option value="Adjudicada">Adjudicada</option>
+  <option value="Perdida">Perdida</option>
+  <option value="Desierta">Desierta</option>
+  <option value="Descartada">Descartada</option>
+</select>
+
+
+
+
+
           </div>
         </div>
       </div>

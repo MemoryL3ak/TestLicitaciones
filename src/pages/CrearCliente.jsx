@@ -20,26 +20,29 @@ export default function CrearCliente() {
   const [contacto, setContacto] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [condVenta, setCondVenta] = useState("");
+const [condVenta, setCondVenta] = useState("30 días");
+
 
   const [toast, setToast] = useState(null);
 
   async function guardarCliente() {
-    if (
-      !rut ||
-      !nombre ||
-      !region ||
-      !comuna ||
-      !direccion ||
-      !contacto ||
-      !email
-    ) {
-      setToast({
-        type: "error",
-        message: "Debes completar todos los campos obligatorios.",
-      });
-      return;
-    }
+ if (
+  !rut ||
+  !nombre ||
+  !region ||
+  !comuna ||
+  !direccion ||
+  !contacto ||
+  !email ||
+  !condVenta
+) {
+  setToast({
+    type: "error",
+    message: "Debes completar todos los campos obligatorios.",
+  });
+  return;
+}
+
 
     const { error } = await supabase.from("clientes").insert([
       {
@@ -107,7 +110,8 @@ export default function CrearCliente() {
       </Link>
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
-        <div className="grid grid-cols-1 gap-6">
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
 
           {/* RUT */}
           <div>
@@ -253,14 +257,31 @@ export default function CrearCliente() {
 
           {/* CONDICIONES */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Condiciones de Venta
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={condVenta}
-              onChange={(e) => setCondVenta(e.target.value)}
-            />
+
+
+
+{/* CONDICIONES */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Condiciones de Venta {/** si es obligatorio pon * */}
+  </label>
+
+  <select
+    className="w-full rounded-md border border-gray-300 px-3 py-2"
+    value={condVenta}
+    onChange={(e) => setCondVenta(e.target.value)}
+  >
+    <option value="">Seleccione…</option>
+    <option value="30 días">30 días</option>
+    <option value="Contado">Contado</option>
+  </select>
+</div>
+
+
+
+
+
+
           </div>
         </div>
 

@@ -105,7 +105,6 @@ export default function ListarLicitaciones() {
   // ----------------------------------------------------------------
   return (
     <div className="max-w-6xl mx-auto p-8">
-
       <h1 className="text-3xl font-semibold text-gray-900 mb-8">
         Licitaciones
       </h1>
@@ -115,9 +114,10 @@ export default function ListarLicitaciones() {
       ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-300/40 rounded-xl p-4 mb-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-
           <div>
-            <label className="text-sm font-semibold text-gray-700">Fecha desde</label>
+            <label className="text-sm font-semibold text-gray-700">
+              Fecha desde
+            </label>
             <input
               type="date"
               value={filtroFechaDesde}
@@ -127,7 +127,9 @@ export default function ListarLicitaciones() {
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-gray-700">Fecha hasta</label>
+            <label className="text-sm font-semibold text-gray-700">
+              Fecha hasta
+            </label>
             <input
               type="date"
               value={filtroFechaHasta}
@@ -137,7 +139,9 @@ export default function ListarLicitaciones() {
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-gray-700">Creado por</label>
+            <label className="text-sm font-semibold text-gray-700">
+              Creado por
+            </label>
             <input
               type="text"
               placeholder="Correo"
@@ -161,7 +165,6 @@ export default function ListarLicitaciones() {
               <option>Desierta</option>
             </select>
           </div>
-
         </div>
       </div>
 
@@ -178,71 +181,90 @@ export default function ListarLicitaciones() {
       </div>
 
       {/* -----------------------------------------------------------
-          TABLA
+          TABLA (SCROLL + HEADER STICKY)
       ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-300/40">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">ID</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">Nombre</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">Fecha</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">Lista</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">Estado</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">Creado por</th>
-              <th className="px-6 py-3 text-right text-xs font-semibold uppercase">Acción</th>
-            </tr>
-          </thead>
+        {/* Contenedor con scroll */}
+       <div className="max-h-[calc(100vh-420px)] overflow-y-auto overflow-x-auto">
 
-          <tbody className="bg-white divide-y divide-gray-200/60">
-
-            {dataFiltrada.length === 0 && (
+          <table className="min-w-full divide-y divide-gray-300/40">
+            <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <td colSpan="7" className="px-6 py-16 text-center text-gray-500">
-                  No hay licitaciones que coincidan con los filtros.
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  Nombre
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  Fecha
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  Lista
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  Estado
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                  Creado por
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold uppercase whitespace-nowrap">
+                  Acción
+                </th>
               </tr>
-            )}
+            </thead>
 
-            {dataFiltrada.map((l) => (
-              <tr key={l.id} className="hover:bg-gray-50 transition">
-
-                <td className="px-6 py-4 text-sm">{l.id}</td>
-
-                <td className="px-6 py-4 text-sm">{l.nombre}</td>
-
-                <td className="px-6 py-4 text-sm">
-                  {l.fecha ? l.fecha.slice(0, 10).split("-").reverse().join("-") : ""}
-                </td>
-
-                <td className="px-6 py-4">
-                  <span className={badge(l.lista_precios)}>
-                    Lista {l.lista_precios}
-                  </span>
-                </td>
-
-                <td className="px-6 py-4">
-                  <span className={badgeEstado(l.estado)}>
-                    {l.estado}
-                  </span>
-                </td>
-
-                <td className="px-6 py-4 text-sm">{l.creado_por}</td>
-
-                <td className="px-6 py-4 text-right">
-                  <Link
-                    to={`/detalle/${l.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-sm"
+            <tbody className="bg-white divide-y divide-gray-200/60">
+              {dataFiltrada.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="7"
+                    className="px-6 py-16 text-center text-gray-500"
                   >
-                    Ver detalle →
-                  </Link>
-                </td>
+                    No hay licitaciones que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
 
-              </tr>
-            ))}
+              {dataFiltrada.map((l) => (
+                <tr key={l.id} className="hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 text-sm whitespace-nowrap">{l.id}</td>
 
-          </tbody>
-        </table>
+                  <td className="px-6 py-4 text-sm">{l.nombre}</td>
+
+                  <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    {l.fecha
+                      ? l.fecha.slice(0, 10).split("-").reverse().join("-")
+                      : ""}
+                  </td>
+
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={badge(l.lista_precios)}>
+                      Lista {l.lista_precios}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={badgeEstado(l.estado)}>{l.estado}</span>
+                  </td>
+
+                  <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    {l.creado_por}
+                  </td>
+
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <Link
+                      to={`/detalle/${l.id}`}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Ver detalle →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

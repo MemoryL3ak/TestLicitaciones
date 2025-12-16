@@ -485,6 +485,9 @@ const REGIONES_CHILE = {
     "Torres del Paine",
   ],
 };
+const OPCIONES_COND_VENTA = ["30 días", "Contado"];
+
+
 
 
 const STORAGE_KEY_PREFIX = "editar_licitacion_draft_";
@@ -787,6 +790,7 @@ function volver() {
       setTelefono(lic.telefono || "");
       setCondVenta(lic.condicion_venta || "");
       setFleteEstimado(lic.flete_estimado || 0);
+     setFleteEstimado(lic.flete_estimado || 0);
 
       // Normalizar items:
       // En tu DB guardas valor_unitario = precioBase + fletePorUnidad
@@ -1135,6 +1139,7 @@ function volver() {
 
         estado,
         flete_estimado: Number(fleteEstimado),
+
 
         total_con_iva: totalConIVA,
         total_sin_iva: totalNeto,
@@ -1530,17 +1535,37 @@ function volver() {
             />
           </div>
 
-          {/* Condición venta */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Condiciones de Venta *
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={condVenta}
-              onChange={(e) => setCondVenta(e.target.value)}
-            />
-          </div>
+
+
+
+
+{/* Condición venta */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Condiciones de Venta *
+  </label>
+
+  <select
+    className="w-full rounded-md border border-gray-300 px-3 py-2"
+    value={condVenta}
+    onChange={(e) => setCondVenta(e.target.value)}
+  >
+    <option value="">Seleccione…</option>
+    {OPCIONES_COND_VENTA.map((op) => (
+      <option key={op} value={op}>
+        {op}
+      </option>
+    ))}
+  </select>
+</div>
+
+
+
+
+
+
+
+
         </div>
       </div>
 

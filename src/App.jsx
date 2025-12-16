@@ -33,13 +33,13 @@ function LayoutWrapper() {
 
   return (
     <>
-      {/* BANNER SUPERIOR */}
+      {/* BANNER SUPERIOR (SIN LÍNEA / SIN SOMBRA, MÁS CHICO) */}
       {!hideUI && (
-        <div className="w-full bg-white flex justify-center py-6 shadow-md border-b border-gray-200">
+        <div className="w-full bg-white flex justify-center py-4">
           <img
             src="https://i.ibb.co/5X21Zx9k/Amsodent.png"
             alt="Amsodent Logo"
-            className="h-24 object-contain"
+            className="h-14 md:h-16 object-contain"
           />
         </div>
       )}

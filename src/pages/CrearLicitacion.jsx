@@ -555,7 +555,8 @@ export default function CrearLicitacion() {
   const [contacto, setContacto] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [condVenta, setCondVenta] = useState("");
+ const [condVenta, setCondVenta] = useState("30 días");
+
   const [fleteEstimado, setFleteEstimado] = useState(0);
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
   const [region, setRegion] = useState("");
@@ -1007,7 +1008,7 @@ export default function CrearLicitacion() {
           fecha: fechaHoy,
           creado_por: user.email, // si existe en tu tabla
           estado: "En espera",
-
+          flete_estimado: Number(fleteEstimado),
           total_con_iva: totalConIVA,
           total_sin_iva: totalNeto,
           total_iva: totalIVA,
@@ -1429,14 +1430,26 @@ export default function CrearLicitacion() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Condiciones de Venta *
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={condVenta}
-              onChange={(e) => setCondVenta(e.target.value)}
-            />
+
+
+         <label className="block text-sm font-medium text-gray-700 mb-1">
+  Condiciones de Venta *
+</label>
+
+<select
+  className="w-full rounded-md border border-gray-300 px-3 py-2"
+  value={condVenta}
+  onChange={(e) => setCondVenta(e.target.value)}
+>
+  <option value="">Seleccione…</option>
+  <option value="30 días">30 días</option>
+  <option value="Contado">Contado</option>
+</select>
+
+
+
+
+
           </div>
         </div>
       </div>

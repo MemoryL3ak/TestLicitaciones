@@ -608,7 +608,10 @@ export default function CrearLicitacion() {
   ============================================================ */
   useEffect(() => {
     const guardado = localStorage.getItem(STORAGE_KEY);
-    if (!guardado) return;
+    if (!guardado) {
+    setHydrated(true);
+    return;
+  }
 
     try {
       const data = JSON.parse(guardado);

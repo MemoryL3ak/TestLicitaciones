@@ -100,11 +100,17 @@ export default function CampanasProductos() {
   return (
     <div className="w-full">
       {toast && (
-        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
 
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900">Campañas de Productos</h1>
+        <h1 className="text-3xl font-semibold text-gray-900">
+          Campañas de Productos
+        </h1>
 
         <button
           onClick={() => navigate("/campanas/nueva")}
@@ -121,35 +127,45 @@ export default function CampanasProductos() {
           <div className="text-gray-500">No hay campañas creadas.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    Nombre
+                  </th>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    Inicio
+                  </th>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    Fin
+                  </th>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    SKUs
+                  </th>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    Creada por
+                  </th>
+                  <th className="px-4 py-2 text-left text-[13px] font-semibold text-gray-600">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
 
-
-
-
-
-         <thead>
-  <tr className="border-b border-gray-200">
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">Nombre</th>
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">Inicio</th>
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">Fin</th>
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">SKUs</th>
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">Creada por</th>
-    <th className="px-4 py-3 text-left text-sm font-normal text-gray-600">Acciones</th>
-  </tr>
-</thead>
-
-
-
-
-              <tbody>
+              <tbody className="divide-y divide-gray-200 bg-white">
                 {campanas.map((c) => (
-                  <tr key={c.id} className="border-b last:border-b-0">
-                    <td className="py-3 pr-4 font-semibold text-gray-900">{c.nombre}</td>
-                    <td className="py-3 pr-4">{formatearFecha(c.start_date)}</td>
-                    <td className="py-3 pr-4">{formatearFecha(c.end_date)}</td>
-                    <td className="py-3 pr-4">{c.items_count}</td>
-                    <td className="py-3 pr-4">{c.creador_nombre}</td>
-                    <td className="py-3 pr-4">
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      {c.nombre}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {formatearFecha(c.start_date)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {formatearFecha(c.end_date)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">{c.items_count}</td>
+                    <td className="px-4 py-3 text-sm">{c.creador_nombre}</td>
+                    <td className="px-4 py-3">
                       <button
                         onClick={() => navigate(`/campanas/editar/${c.id}`)}
                         className="cursor-pointer bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-md"
@@ -159,6 +175,17 @@ export default function CampanasProductos() {
                     </td>
                   </tr>
                 ))}
+
+                {campanas.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="px-6 py-8 text-center text-sm text-gray-500"
+                    >
+                      No hay campañas que mostrar.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
 

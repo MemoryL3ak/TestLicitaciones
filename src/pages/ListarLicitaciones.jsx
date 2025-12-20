@@ -185,36 +185,35 @@ export default function ListarLicitaciones() {
       ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl overflow-hidden">
         {/* Contenedor con scroll */}
-       <div className="max-h-[calc(100vh-420px)] overflow-y-auto overflow-x-auto">
-
-          <table className="min-w-full divide-y divide-gray-300/40">
+        <div className="max-h-[calc(100vh-420px)] overflow-y-auto overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-300">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Nombre
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Fecha
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Lista
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Estado
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Creado por
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold whitespace-nowrap">
+                <th className="px-6 py-2 text-right text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Acción
                 </th>
               </tr>
             </thead>
 
-            <tbody className="bg-white divide-y divide-gray-200/60">
+            <tbody className="bg-white divide-y divide-gray-200">
               {dataFiltrada.length === 0 && (
                 <tr>
                   <td

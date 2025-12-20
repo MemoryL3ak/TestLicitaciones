@@ -127,22 +127,22 @@ export default function Clientes() {
         <table className="min-w-full divide-y divide-gray-300">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 RUT
               </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 Nombre
               </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 Región
               </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 Comuna
               </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 Contacto
               </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600">
                 Acción
               </th>
             </tr>

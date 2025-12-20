@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
+import { UnsavedChangesProvider } from "./context/UnsavedChangesContext";
 
 // AUTH
 import Login from "./pages/Login";
@@ -21,6 +22,8 @@ import Clientes from "./pages/Clientes";
 import CrearCliente from "./pages/CrearCliente";
 import EditarCliente from "./pages/EditarCliente";
 
+import MonitoreoUsuarios from "./pages/MonitoreoUsuarios";
+
 /* ============================================================
    WRAPPER PARA OCULTAR BANNER EN LOGIN / RESET
 ============================================================ */
@@ -33,7 +36,6 @@ function LayoutWrapper() {
 
   return (
     <>
-      {/* BANNER SUPERIOR (SIN LÍNEA / SIN SOMBRA, MÁS CHICO) */}
       {!hideUI && (
         <div className="w-full bg-white flex justify-center py-4">
           <img
@@ -58,7 +60,9 @@ function LayoutWrapper() {
           path="/"
           element={
             <ProtectedRoute>
-              <SidebarLayout />
+              <UnsavedChangesProvider>
+                <SidebarLayout />
+              </UnsavedChangesProvider>
             </ProtectedRoute>
           }
         >
@@ -76,6 +80,9 @@ function LayoutWrapper() {
           <Route path="clientes" element={<Clientes />} />
           <Route path="clientes/nuevo" element={<CrearCliente />} />
           <Route path="clientes/editar/:id" element={<EditarCliente />} />
+
+          {/* ✅ MONITOREO (OJO: sin / porque es hija) */}
+          <Route path="monitoreo" element={<MonitoreoUsuarios />} />
         </Route>
 
         {/* FALLBACK */}
@@ -85,9 +92,6 @@ function LayoutWrapper() {
   );
 }
 
-/* ============================================================
-   APP
-============================================================ */
 export default function App() {
   return (
     <BrowserRouter>

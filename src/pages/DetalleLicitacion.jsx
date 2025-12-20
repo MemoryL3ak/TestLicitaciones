@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import Toast from "../components/Toast";
 import Select, { components } from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
+import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 
 /* ============================================================
    TOOLTIP SOLO PARA PRODUCTO (NO TOCA EL INPUT DEL SELECT)
@@ -96,13 +97,11 @@ const estadoStyles = {
   "Descartada": "bg-purple-50 text-purple-800 border-purple-300",
 };
 
-
 /* ============================================================
    REGIONES / COMUNAS (OBJETO COMPLETO)
 ============================================================ */
 const REGIONES_CHILE = {
   "Arica y Parinacota": ["Arica", "Camarones", "Putre", "General Lagos"],
-
   Tarapacá: [
     "Iquique",
     "Alto Hospicio",
@@ -112,7 +111,6 @@ const REGIONES_CHILE = {
     "Huara",
     "Pica",
   ],
-
   Antofagasta: [
     "Antofagasta",
     "Mejillones",
@@ -124,7 +122,6 @@ const REGIONES_CHILE = {
     "Tocopilla",
     "María Elena",
   ],
-
   Atacama: [
     "Copiapó",
     "Caldera",
@@ -136,7 +133,6 @@ const REGIONES_CHILE = {
     "Freirina",
     "Huasco",
   ],
-
   Coquimbo: [
     "La Serena",
     "Coquimbo",
@@ -154,8 +150,7 @@ const REGIONES_CHILE = {
     "Punitaqui",
     "Río Hurtado",
   ],
-
-  "Valparaíso": [
+  Valparaíso: [
     "Valparaíso",
     "Casablanca",
     "Concón",
@@ -195,7 +190,6 @@ const REGIONES_CHILE = {
     "Olmué",
     "Villa Alemana",
   ],
-
   "Metropolitana de Santiago": [
     "Cerrillos",
     "Cerro Navia",
@@ -250,7 +244,6 @@ const REGIONES_CHILE = {
     "Padre Hurtado",
     "Peñaflor",
   ],
-
   "O'Higgins": [
     "Rancagua",
     "Codegua",
@@ -286,7 +279,6 @@ const REGIONES_CHILE = {
     "Pumanque",
     "Santa Cruz",
   ],
-
   Maule: [
     "Talca",
     "Constitución",
@@ -319,7 +311,6 @@ const REGIONES_CHILE = {
     "Villa Alegre",
     "Yerbas Buenas",
   ],
-
   Ñuble: [
     "Chillán",
     "Bulnes",
@@ -342,7 +333,6 @@ const REGIONES_CHILE = {
     "San Fabián",
     "San Nicolás",
   ],
-
   Biobío: [
     "Concepción",
     "Coronel",
@@ -378,7 +368,6 @@ const REGIONES_CHILE = {
     "Yumbel",
     "Alto Biobío",
   ],
-
   "La Araucanía": [
     "Temuco",
     "Carahue",
@@ -413,7 +402,6 @@ const REGIONES_CHILE = {
     "Traiguén",
     "Victoria",
   ],
-
   "Los Ríos": [
     "Valdivia",
     "Corral",
@@ -428,7 +416,6 @@ const REGIONES_CHILE = {
     "Lago Ranco",
     "Río Bueno",
   ],
-
   "Los Lagos": [
     "Puerto Montt",
     "Calbuco",
@@ -457,7 +444,6 @@ const REGIONES_CHILE = {
     "San Juan de la Costa",
     "San Pablo",
   ],
-
   Aysén: [
     "Coyhaique",
     "Lago Verde",
@@ -470,7 +456,6 @@ const REGIONES_CHILE = {
     "Chile Chico",
     "Río Ibáñez",
   ],
-
   "Magallanes y de la Antártica Chilena": [
     "Punta Arenas",
     "Laguna Blanca",
@@ -487,31 +472,41 @@ const REGIONES_CHILE = {
 };
 const OPCIONES_COND_VENTA = ["30 días", "Contado"];
 
-
-
-
 const STORAGE_KEY_PREFIX = "editar_licitacion_draft_";
 
 export default function EditarLicitacion() {
   const { id } = useParams();
 
-const navigate = useNavigate();
-const location = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-// ✅ fallback inteligente: evita mandarte al login por rutas mal puestas
-const baseLicitaciones = location.pathname.startsWith("/app/")
-  ? "/app/licitaciones"
-  : location.pathname.startsWith("/dashboard/")
-  ? "/dashboard/licitaciones"
-  : "/licitaciones";
+  const {
+    setIsDirty,
+    requestNavigation,
+    registerDiscardHandler,
+    clearDiscardHandler,
+    registerSaveHandler,
+    clearSaveHandler,
+  } = useUnsavedChanges();
 
-function volver() {
-  // volver real si hay historial (no te manda al login)
-  if (window.history.length > 1) navigate(-1);
-  else navigate(baseLicitaciones, { replace: true });
-}
+  const baselineRef = useRef(null);
 
+  // ✅ NUEVO: refs para evitar closures viejos en el popup (Guardar/Descartar)
+  const saveHandlerRef = useRef(null);
+  const discardHandlerRef = useRef(null);
 
+  // ✅ fallback inteligente: evita mandarte al login por rutas mal puestas
+  const baseLicitaciones = location.pathname.startsWith("/app/")
+    ? "/app/licitaciones"
+    : location.pathname.startsWith("/dashboard/")
+    ? "/dashboard/licitaciones"
+    : "/licitaciones";
+
+  function volver() {
+    // volver real si hay historial (no te manda al login)
+    if (window.history.length > 1) requestNavigation(-1);
+    else requestNavigation(baseLicitaciones, { replace: true });
+  }
 
   const [tooltip, setTooltip] = useState({
     visible: false,
@@ -571,7 +566,7 @@ function volver() {
       formato: "",
       cantidad: 0,
       precio: 0, // precio BASE (sin flete)
-      total: 0,  // total con flete incluido
+      total: 0, // total con flete incluido
       observacion: "",
       mostrarObs: false,
     },
@@ -579,8 +574,7 @@ function volver() {
 
   const [hydrated, setHydrated] = useState(false);
 
-
-    async function buscarClientePorRut(rut) {
+  async function buscarClientePorRut(rut) {
     if (!rut) return;
 
     const { data, error } = await supabase
@@ -674,8 +668,7 @@ function volver() {
     }
   }, [STORAGE_KEY]);
 
-
-    // Guardar borrador
+  // Guardar borrador
   useEffect(() => {
     if (!hydrated) return;
 
@@ -727,6 +720,235 @@ function volver() {
     fleteEstimado,
     items,
   ]);
+
+  /* ============================================================
+     DETECCIÓN DE CAMBIOS (ALERTA SI CAMBIAS DE SECCIÓN)
+  ============================================================ */
+  function buildSnapshot() {
+    return JSON.stringify({
+      // LICITACIÓN
+      idLicitacionInput: idLicitacionInput || "",
+      nombre: nombre || "",
+      fechaHoraCierre: fechaHoraCierre || "",
+      monto: Number(monto || 0),
+      listado: String(listado || "1"),
+      estado: estado || "En espera",
+      tipoCompra: tipoCompra || "Compra ágil",
+
+      // ENTIDAD
+      rutEntidad: rutEntidad || "",
+      nombreEntidad: nombreEntidad || "",
+      departamento: departamento || "",
+      municipalidad: municipalidad || "", // OJO: no se toca nada más
+      region: region || "",
+      comuna: comuna || "",
+      direccion: direccion || "",
+      contacto: contacto || "",
+      email: email || "",
+      telefono: telefono || "",
+      condVenta: condVenta || "",
+
+      // FLETE
+      fleteEstimado: Number(fleteEstimado || 0),
+
+      // ITEMS (solo lo que el usuario edita)
+      items: (items || []).map((it) => ({
+        sku: it.sku || "",
+        producto: it.producto || "",
+        categoria: it.categoria || "",
+        formato: it.formato || "",
+        cantidad: Number(it.cantidad || 0),
+        precio: Number(it.precio || 0),
+        observacion: it.observacion || "",
+        mostrarObs: Boolean(it.mostrarObs),
+      })),
+    });
+  }
+
+  // Al cambiar de licitación, resetea baseline
+  useEffect(() => {
+    baselineRef.current = null;
+    setIsDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Cuando termina de hidratar/cargar, fija baseline inicial
+  useEffect(() => {
+    if (!hydrated) return;
+    if (loading) return;
+
+    if (!baselineRef.current) {
+      baselineRef.current = buildSnapshot();
+      setIsDirty(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, loading]);
+
+  // Detector de cambios real
+  useEffect(() => {
+    if (!baselineRef.current) return;
+    const now = buildSnapshot();
+    setIsDirty(now !== baselineRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    hydrated,
+    loading,
+    idLicitacionInput,
+    nombre,
+    fechaHoraCierre,
+    monto,
+    listado,
+    estado,
+    tipoCompra,
+    rutEntidad,
+    nombreEntidad,
+    departamento,
+    municipalidad,
+    region,
+    comuna,
+    direccion,
+    contacto,
+    email,
+    telefono,
+    condVenta,
+    fleteEstimado,
+    items,
+  ]);
+
+  async function descartarCambios() {
+    // borra draft local
+    localStorage.removeItem(STORAGE_KEY);
+
+    // recarga desde BD (forzado)
+    setLoading(true);
+
+    const { data: lic, error: errLic } = await supabase
+      .from("licitaciones")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (errLic || !lic) {
+      setToast({ type: "error", message: "Error recargando la licitación" });
+      setLoading(false);
+      return;
+    }
+
+    const { data: itemsDB } = await supabase
+      .from("items_licitacion")
+      .select("*")
+      .eq("licitacion_id", id);
+
+    setIdLicitacionInput(lic.id_licitacion || "");
+    setNombre(lic.nombre || "");
+    setFechaHoraCierre(lic.fecha_hora_cierre || "");
+    setMonto(lic.monto || "");
+    setListado(String(lic.lista_precios || "1"));
+    setEstado(lic.estado || "En espera");
+    setTipoCompra(lic.tipo_compra || "Compra ágil");
+
+    setRutEntidad(lic.rut_entidad || "");
+    setNombreEntidad(lic.nombre_entidad || "");
+    setDepartamento(lic.departamento || "");
+    setMunicipalidad(lic.municipalidad || "");
+    setRegion(lic.region || "");
+    setComuna(lic.comuna || "");
+    setDireccion(lic.direccion || "");
+    setContacto(lic.contacto || "");
+    setEmail(lic.email || "");
+    setTelefono(lic.telefono || "");
+    setCondVenta(lic.condicion_venta || "");
+    setFleteEstimado(lic.flete_estimado || 0);
+    setFleteEstimado(lic.flete_estimado || 0);
+
+    const cantidadProductosDB = (itemsDB || []).reduce(
+      (acc, it) => acc + Number(it.cantidad || 0),
+      0
+    );
+
+    const fletePorUnidadDB =
+      cantidadProductosDB > 0
+        ? redondear(Number(lic.flete_estimado || 0) / cantidadProductosDB)
+        : 0;
+
+    const itemsNormalizados =
+      (itemsDB || []).map((i) => {
+        const cantidad = Math.max(1, Number(i.cantidad || 1));
+        const valorUnit = Number(i.valor_unitario || 0);
+        const precioBase = Math.max(0, valorUnit - fletePorUnidadDB);
+
+        return {
+          id_item: i.id,
+          sku: i.sku || "",
+          producto: i.producto || "",
+          categoria: i.categoria || "",
+          formato: i.formato || "",
+          cantidad,
+          precio: precioBase,
+          total: redondear(cantidad * (precioBase + fletePorUnidadDB)),
+          observacion: i.observacion || "",
+          mostrarObs: Boolean(i.observacion),
+        };
+      }) || [];
+
+    setItems(
+      itemsNormalizados.length > 0
+        ? itemsNormalizados
+        : [
+            {
+              id_item: null,
+              sku: "",
+              producto: "",
+              categoria: "",
+              formato: "",
+              cantidad: 0,
+              precio: 0,
+              total: 0,
+              observacion: "",
+              mostrarObs: false,
+            },
+          ]
+    );
+
+    setHydrated(true);
+    setLoading(false);
+
+    // baseline nueva
+    baselineRef.current = null;
+    setIsDirty(false);
+
+    setToast({ type: "success", message: "Cambios descartados correctamente." });
+  }
+
+  // ✅ NUEVO: mantener refs siempre apuntando a la última versión real
+  useEffect(() => {
+    saveHandlerRef.current = guardarCambios;
+  });
+
+  useEffect(() => {
+    discardHandlerRef.current = descartarCambios;
+  });
+
+  // ✅ MODIFICADO: registrar handlers usando refs (evita ejecutar guardarCambios con estados viejos)
+  useEffect(() => {
+    registerDiscardHandler(() => discardHandlerRef.current?.());
+    registerSaveHandler(() => saveHandlerRef.current?.());
+
+    return () => {
+      clearDiscardHandler();
+      clearSaveHandler();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // ✅ IMPORTANTE: al salir de la edición, apaga el guard global (para que no afecte "Crear")
+  useEffect(() => {
+    return () => {
+      setIsDirty(false);
+      baselineRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cargar productos SIEMPRE
   useEffect(() => {
@@ -790,11 +1012,8 @@ function volver() {
       setTelefono(lic.telefono || "");
       setCondVenta(lic.condicion_venta || "");
       setFleteEstimado(lic.flete_estimado || 0);
-     setFleteEstimado(lic.flete_estimado || 0);
+      setFleteEstimado(lic.flete_estimado || 0);
 
-      // Normalizar items:
-      // En tu DB guardas valor_unitario = precioBase + fletePorUnidad
-      // Entonces aquí guardamos precio BASE = valor_unitario - fletePorUnidad (calculado con flete_estimado / cantidadProductos)
       const cantidadProductosDB = (itemsDB || []).reduce(
         (acc, it) => acc + Number(it.cantidad || 0),
         0
@@ -851,8 +1070,7 @@ function volver() {
     cargarTodoDB();
   }, [id, hydrated, STORAGE_KEY]);
 
-
-    /* ============================================================
+  /* ============================================================
      OPCIONES SELECT
   ============================================================ */
   const opcionesSKU = productos.map((p) => ({
@@ -964,9 +1182,7 @@ function volver() {
     setItems(copia);
   }
 
-
-
-    /* ============================================================
+  /* ============================================================
      RESUMEN (IDÉNTICO A CREAR)
   ============================================================ */
   const cantidadProductos = items.reduce(
@@ -1016,8 +1232,7 @@ function volver() {
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
   else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
-
-    /* ============================================================
+  /* ============================================================
      EXPORTAR PDF (USA EL ID AUTOGENERADO: `id`)
   ============================================================ */
   async function exportarPDF() {
@@ -1026,7 +1241,6 @@ function volver() {
     const fechaHoy = new Date().toISOString().slice(0, 10);
 
     await generarPDFcotizacion({
-      // ✅ ESTE ES EL ID AUTOGENERADO DE LA BD (route param)
       numero_licitacion: id,
       fecha_emision: fechaHoy,
 
@@ -1079,6 +1293,7 @@ function volver() {
 
   /* ============================================================
      GUARDAR CAMBIOS (UPDATE LIC + UPSERT ITEMS)
+     ✅ MODIFICADO: filtra filas vacías y valida antes de insertar
   ============================================================ */
   async function guardarCambios() {
     setToast(null);
@@ -1101,7 +1316,7 @@ function volver() {
         type: "error",
         message: "Faltan campos obligatorios:\n\n• " + errores.join("\n• "),
       });
-      return;
+      return false;
     }
 
     try {
@@ -1111,10 +1326,9 @@ function volver() {
         type: "error",
         message: "Error al guardar el cliente asociado.",
       });
-      return;
+      return false;
     }
 
-    // ✅ UPDATE por id autogenerado (route param)
     const { error: errUpdate } = await supabase
       .from("licitaciones")
       .update({
@@ -1140,7 +1354,6 @@ function volver() {
         estado,
         flete_estimado: Number(fleteEstimado),
 
-
         total_con_iva: totalConIVA,
         total_sin_iva: totalNeto,
         total_iva: totalIVA,
@@ -1150,38 +1363,96 @@ function volver() {
     if (errUpdate) {
       console.error(errUpdate);
       setToast({ type: "error", message: "Error al guardar licitación" });
-      return;
+      return false;
     }
 
-    // UPSERT items: si tiene id_item -> update; si no -> insert
-    for (const it of items) {
+    // ✅ 1) Filtrar filas completamente vacías (no se guardan)
+    const itemsParaGuardar = (items || []).filter((it) => {
+      const sku = (it?.sku ?? "").trim();
+      const producto = (it?.producto ?? "").trim();
+      const formato = (it?.formato ?? "").trim();
+      const categoria = (it?.categoria ?? "").trim();
+      const obs = (it?.observacion ?? "").trim();
+      const cantidad = Number(it?.cantidad ?? 0);
+      const precio = Number(it?.precio ?? 0);
+
+      const tieneAlgo =
+        sku ||
+        producto ||
+        formato ||
+        categoria ||
+        obs ||
+        cantidad > 0 ||
+        precio > 0;
+
+      return tieneAlgo;
+    });
+
+    // ✅ 2) Validar: si la fila tiene algo, debe estar completa
+    for (let i = 0; i < itemsParaGuardar.length; i++) {
+      const it = itemsParaGuardar[i];
+
+      const sku = (it?.sku ?? "").trim();
+      const producto = (it?.producto ?? "").trim();
+      const cantidad = Number(it?.cantidad ?? 0);
+
+      const faltan = [];
+      if (!sku) faltan.push("SKU");
+      if (!producto) faltan.push("Producto");
+      if (!(cantidad > 0)) faltan.push("Cantidad");
+
+      if (faltan.length > 0) {
+        setToast({
+          type: "error",
+          message:
+            `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` +
+            faltan.join("\n• "),
+        });
+        return false;
+      }
+    }
+
+    // ✅ 3) UPSERT real (sin null/undefined)
+    for (const it of itemsParaGuardar) {
       const payload = {
         licitacion_id: id,
-        producto: it.producto,
-        formato: it.formato,
-        cantidad: Number(it.cantidad),
-        valor_unitario: Number(it.precio) + fletePorUnidad,
-        sku: it.sku,
-        total: Number(it.total),
-        categoria: it.categoria,
-        observacion: it.observacion,
+        producto: String(it?.producto ?? ""),
+        formato: String(it?.formato ?? ""),
+        cantidad: Number(it?.cantidad ?? 0),
+        valor_unitario: Number(it?.precio ?? 0) + fletePorUnidad,
+        sku: String(it?.sku ?? ""),
+        total: Number(it?.total ?? 0),
+        categoria: String(it?.categoria ?? ""),
+        observacion: String(it?.observacion ?? ""),
       };
 
       if (it.id_item) {
-        await supabase.from("items_licitacion").update(payload).eq("id", it.id_item);
+        const { error: eUpd } = await supabase
+          .from("items_licitacion")
+          .update(payload)
+          .eq("id", it.id_item);
+
+        if (eUpd) {
+          console.error(eUpd);
+          setToast({ type: "error", message: "Error al guardar un ítem" });
+          return false;
+        }
       } else {
-        const { data: ins } = await supabase
+        const { data: ins, error: eIns } = await supabase
           .from("items_licitacion")
           .insert([payload])
           .select("id")
           .single();
 
-        // guardar el id generado en el state (para futuras ediciones)
+        if (eIns) {
+          console.error(eIns);
+          setToast({ type: "error", message: "Error al insertar un ítem" });
+          return false;
+        }
+
         if (ins?.id) {
           setItems((prev) =>
-            prev.map((x) =>
-              x === it ? { ...x, id_item: ins.id } : x
-            )
+            prev.map((x) => (x === it ? { ...x, id_item: ins.id } : x))
           );
         }
       }
@@ -1192,12 +1463,15 @@ function volver() {
       message: `La licitación "${nombre}" fue actualizada correctamente.`,
     });
 
-    // Mantener borrador o limpiarlo (yo lo limpio al guardar exitoso)
     localStorage.removeItem(STORAGE_KEY);
+
+    baselineRef.current = buildSnapshot();
+    setIsDirty(false);
+
+    return true;
   }
 
-
-    /* ============================================================
+  /* ============================================================
      UI
   ============================================================ */
   if (loading) {
@@ -1232,7 +1506,11 @@ function volver() {
       )}
 
       {toast && (
-        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
 
       <div className="flex items-center justify-between mb-8">
@@ -1240,25 +1518,21 @@ function volver() {
           Edición de Licitación #{idLicitacionInput}
         </h1>
 
-
-<button
-  type="button"
-  onClick={volver}
-  className="cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition"
->
-  ← Volver
-</button>
-
-
-
-
-
+        <button
+          type="button"
+          onClick={volver}
+          className="cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition"
+        >
+          ← Volver
+        </button>
       </div>
 
       {/* ============================================================
           DATOS LICITACIÓN
       ============================================================ */}
-      <h2 className="text-xl font-semibold text-gray-800 mb-3">Datos de la Licitación</h2>
+      <h2 className="text-xl font-semibold text-gray-800 mb-3">
+        Datos de la Licitación
+      </h2>
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1270,7 +1544,12 @@ function volver() {
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={idLicitacionInput}
-              onChange={(e) => setIdLicitacionInput(e.target.value)}
+              onChange={(e) => {
+                setIdLicitacionInput(e.target.value);
+
+                // ✅ asegura que cambiar el ID active el popup
+                setIsDirty(true);
+              }}
             />
           </div>
 
@@ -1352,33 +1631,30 @@ function volver() {
               Estado
             </label>
 
-<select
-  className={`w-full rounded-md border px-3 py-2 ${estadoStyles[estado] || ""}`}
-  value={estado}
-  onChange={(e) => setEstado(e.target.value)}
->
-  <option value="En espera">En espera</option>
-  <option value="Adjudicada">Adjudicada</option>
-  <option value="Perdida">Perdida</option>
-  <option value="Desierta">Desierta</option>
-  <option value="Descartada">Descartada</option>
-</select>
-
-
-
-
-
+            <select
+              className={`w-full rounded-md border px-3 py-2 ${
+                estadoStyles[estado] || ""
+              }`}
+              value={estado}
+              onChange={(e) => setEstado(e.target.value)}
+            >
+              <option value="En espera">En espera</option>
+              <option value="Adjudicada">Adjudicada</option>
+              <option value="Perdida">Perdida</option>
+              <option value="Desierta">Desierta</option>
+              <option value="Descartada">Descartada</option>
+            </select>
           </div>
         </div>
       </div>
-
-
 
       {/* ============================================================
           DATOS ENTIDAD
       ============================================================ */}
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-semibold text-gray-800">Datos de la Entidad</h2>
+        <h2 className="text-xl font-semibold text-gray-800">
+          Datos de la Entidad
+        </h2>
 
         <button
           className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
@@ -1396,7 +1672,9 @@ function volver() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* RUT */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">RUT *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              RUT *
+            </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={rutEntidad}
@@ -1535,37 +1813,25 @@ function volver() {
             />
           </div>
 
+          {/* Condición venta */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Condiciones de Venta *
+            </label>
 
-
-
-
-{/* Condición venta */}
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Condiciones de Venta *
-  </label>
-
-  <select
-    className="w-full rounded-md border border-gray-300 px-3 py-2"
-    value={condVenta}
-    onChange={(e) => setCondVenta(e.target.value)}
-  >
-    <option value="">Seleccione…</option>
-    {OPCIONES_COND_VENTA.map((op) => (
-      <option key={op} value={op}>
-        {op}
-      </option>
-    ))}
-  </select>
-</div>
-
-
-
-
-
-
-
-
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={condVenta}
+              onChange={(e) => setCondVenta(e.target.value)}
+            >
+              <option value="">Seleccione…</option>
+              {OPCIONES_COND_VENTA.map((op) => (
+                <option key={op} value={op}>
+                  {op}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1676,7 +1942,8 @@ function volver() {
                   Precio Unitario
                 </label>
                 <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
-                  $ {(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
+                  ${" "}
+                  {(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
                 </div>
               </div>
 
@@ -1731,7 +1998,6 @@ function volver() {
           </div>
         ))}
       </div>
-
 
       {/* ============================================================
           RESUMEN (IDÉNTICO A CREAR)

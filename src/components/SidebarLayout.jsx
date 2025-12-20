@@ -1,6 +1,8 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useEffect, useState } from "react";
+import { useUnsavedChanges } from "../context/UnsavedChangesContext";
+import SessionTracker from "../components/SessionTracker"; // ✅ NUEVO
 
 const ROLE_LABELS = {
   admin: "Administrador",
@@ -13,17 +15,25 @@ const ROLE_LABELS = {
 function labelRol(rol) {
   if (!rol) return "Usuario";
   const key = String(rol).trim();
-  return ROLE_LABELS[key] || key; // si viene "Administrador" ya formateado, lo deja igual
+  return ROLE_LABELS[key] || key;
 }
 
 export default function SidebarLayout() {
   const location = useLocation();
   const [perfil, setPerfil] = useState(null);
+  const { requestNavigation } = useUnsavedChanges();
 
   const isActive = (path) =>
     location.pathname.startsWith(path)
       ? "bg-blue-600 text-white border-blue-600"
       : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50";
+
+  function onNavClick(e, to) {
+    // respetar ctrl/cmd click etc
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    requestNavigation(to);
+  }
 
   /* ================================
      CARGAR PERFIL
@@ -34,8 +44,6 @@ export default function SidebarLayout() {
       const user = authData?.user;
       if (!user) return;
 
-      // OJO: si tu tabla profiles tiene el id = auth.user.id, esto es más robusto que por email.
-      // Si tú lo estás guardando por email y te funciona, lo dejamos igual.
       const { data: perfilDB } = await supabase
         .from("profiles")
         .select("nombre, rol, email")
@@ -47,8 +55,8 @@ export default function SidebarLayout() {
 
       setPerfil({
         nombre,
-        rol: rolDB, // guardo valor real
-        rolLabel: labelRol(rolDB), // guardo label bonito
+        rol: rolDB,
+        rolLabel: labelRol(rolDB),
         email: user.email,
       });
     }
@@ -64,8 +72,13 @@ export default function SidebarLayout() {
     window.location.href = "/login";
   }
 
+  const esAdmin = perfil?.rol === "admin";
+
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* ✅ TRACKER GLOBAL (20 min inactividad + heartbeat a BD) */}
+      <SessionTracker />
+
       {/* HEADER STICKY */}
       <header className="sticky top-0 z-50 w-full bg-white px-6 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -73,7 +86,8 @@ export default function SidebarLayout() {
           <nav className="flex items-center gap-2 flex-wrap">
             <Link
               to="/crear"
-              className={`px-4 py-2 rounded-full border text-sm font-medium transition ${isActive(
+              onClick={(e) => onNavClick(e, "/crear")}
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
                 "/crear"
               )}`}
             >
@@ -82,7 +96,8 @@ export default function SidebarLayout() {
 
             <Link
               to="/listar"
-              className={`px-4 py-2 rounded-full border text-sm font-medium transition ${isActive(
+              onClick={(e) => onNavClick(e, "/listar")}
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
                 "/listar"
               )}`}
             >
@@ -91,7 +106,8 @@ export default function SidebarLayout() {
 
             <Link
               to="/productos"
-              className={`px-4 py-2 rounded-full border text-sm font-medium transition ${isActive(
+              onClick={(e) => onNavClick(e, "/productos")}
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
                 "/productos"
               )}`}
             >
@@ -100,13 +116,35 @@ export default function SidebarLayout() {
 
             <Link
               to="/clientes"
-              className={`px-4 py-2 rounded-full border text-sm font-medium transition ${isActive(
+              onClick={(e) => onNavClick(e, "/clientes")}
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
                 "/clientes"
               )}`}
             >
               Clientes
             </Link>
+
+
+
+
+            {/* ✅ SOLO ADMIN: MONITOREO */}
+            {/*
+            {esAdmin && ( 
+              <Link
+                to="/monitoreo"
+                onClick={(e) => onNavClick(e, "/monitoreo")}
+                className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
+                  "/monitoreo"
+                )}`}
+              >
+                Monitoreo
+              </Link>
+            )}
+              */}
           </nav>
+
+
+          
 
           {/* PERFIL + LOGOUT */}
           <div className="flex items-center gap-4">
@@ -137,7 +175,7 @@ export default function SidebarLayout() {
         </div>
       </header>
 
-      {/* CONTENIDO (con padding-top extra por si el header tapa algo) */}
+      {/* CONTENIDO */}
       <main className="max-w-7xl mx-auto p-8">
         <Outlet />
       </main>

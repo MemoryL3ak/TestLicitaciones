@@ -124,8 +124,16 @@ export default function SidebarLayout() {
               Clientes
             </Link>
 
-
-
+            {/* ✅ NUEVO: CAMPAÑAS */}
+            <Link
+              to="/campanas"
+              onClick={(e) => onNavClick(e, "/campanas")}
+              className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
+                "/campanas"
+              )}`}
+            >
+              Campañas
+            </Link>
 
             {/* ✅ SOLO ADMIN: MONITOREO */}
             {/*
@@ -142,9 +150,6 @@ export default function SidebarLayout() {
             )}
               */}
           </nav>
-
-
-          
 
           {/* PERFIL + LOGOUT */}
           <div className="flex items-center gap-4">

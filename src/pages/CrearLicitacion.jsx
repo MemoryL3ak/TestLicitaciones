@@ -43,6 +43,17 @@ function formatear(valor) {
   return Number(valor).toLocaleString("es-CL");
 }
 
+
+function getPrecioBaseParaSKU(prod, listado, campaignPrices) {
+  if (!prod?.sku) return 0;
+
+  const camp = campaignPrices?.[prod.sku];
+  if (camp && camp.precio != null) return Number(camp.precio || 0);
+
+  return Number(prod[`lista${listado}`] ?? 0);
+}
+
+
 /* ============================================================
    BUSCADOR MEJORADO PARA REACT-SELECT
    - Permite "caristo 10" y matchea "caristoprevelador x 10 ml"
@@ -564,6 +575,8 @@ export default function CrearLicitacion() {
 
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
+const [campaignPrices, setCampaignPrices] = useState({});
+// { [sku]: { precio: number, producto: string|null } }
 
   const [items, setItems] = useState([
     {
@@ -714,31 +727,104 @@ export default function CrearLicitacion() {
     cargar();
   }, []);
 
+
+
+  useEffect(() => {
+  let alive = true;
+
+  async function cargarCampanasVigentes() {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+      // 1) campañas vigentes (prioriza la más nueva)
+      const { data: camps, error: eCamps } = await supabase
+        .from("product_campaigns")
+        .select("id, created_at, start_date, end_date")
+        .lte("start_date", hoy)
+        .gte("end_date", hoy)
+        .order("created_at", { ascending: false });
+
+      if (eCamps) throw eCamps;
+
+      const ids = (camps || []).map((c) => c.id);
+      if (ids.length === 0) {
+        if (alive) setCampaignPrices({});
+        return;
+      }
+
+      // 2) items de campañas vigentes
+      const { data: its, error: eIts } = await supabase
+        .from("product_campaign_items")
+        .select("campaign_id, sku, producto, precio_campania")
+        .in("campaign_id", ids);
+
+      if (eIts) throw eIts;
+
+      // 3) map sku -> precio (si un sku está en varias campañas, queda el de la más nueva)
+      const map = {};
+      for (const campId of ids) {
+        for (const it of its || []) {
+          if (it.campaign_id !== campId) continue;
+
+          const sku = String(it.sku || "").trim();
+          if (!sku) continue;
+
+          if (map[sku] == null) {
+            map[sku] = {
+              precio: Number(it.precio_campania || 0),
+              producto: it.producto ? String(it.producto) : null,
+            };
+          }
+        }
+      }
+
+      if (alive) setCampaignPrices(map);
+    } catch (err) {
+      console.error("Error cargando campañas vigentes:", err);
+      if (alive) setCampaignPrices({});
+    }
+  }
+
+  cargarCampanasVigentes();
+
+  return () => {
+    alive = false;
+  };
+}, []);
+
+
   /* ============================================================
      CAMBIO DE LISTA DE PRECIOS
   ============================================================ */
-  function actualizarPreciosPorLista(nuevaLista) {
-    const copia = items.map((it) => {
-      if (!it.sku) return it;
+ function actualizarPreciosPorLista(nuevaLista) {
+  const copia = items.map((it) => {
+    if (!it.sku) return it;
 
-      const prod = productos.find((p) => p.sku === it.sku);
-      if (!prod) return it;
+    const prod = productos.find((p) => p.sku === it.sku);
+    if (!prod) return it;
 
-      const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
-      const precio = Number(prod[listaValida] ?? 0);
+    // ✅ si hay campaña vigente para este SKU, NO se pisa con lista
+    const camp = campaignPrices?.[it.sku];
+    const precio =
+      camp && camp.precio != null
+        ? Number(camp.precio || 0)
+        : Number(prod[nuevaLista === "2" ? "lista2" : "lista1"] ?? 0);
 
-      const cantidad = Math.max(1, Number(it.cantidad || 1));
-      const precioConFlete = precio + fletePorUnidad;
+    const cantidad = Math.max(1, Number(it.cantidad || 1));
+    const precioConFlete = precio + fletePorUnidad;
 
-      return {
-        ...it,
-        precio,
-        total: redondear(cantidad * precioConFlete),
-      };
-    });
+    return {
+      ...it,
+      precio,
+      total: redondear(cantidad * precioConFlete),
+    };
+  });
 
-    setItems(copia);
-  }
+  setItems(copia);
+}
+
+
+
 
   /* ============================================================
      ACTUALIZAR ÍTEM
@@ -758,7 +844,9 @@ export default function CrearLicitacion() {
       item.producto = prod.nombre;
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
-      item.precio = Number(prod[`lista${listado}`] ?? 0);
+      
+    // ✅ campaña vigente si existe; si no, lista seleccionada
+  item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
@@ -834,6 +922,44 @@ export default function CrearLicitacion() {
     setItems(copia);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fletePorUnidad, hydrated]);
+
+
+useEffect(() => {
+  if (!hydrated) return;
+  if (!productos?.length) return;
+
+  const tieneCamp = campaignPrices && Object.keys(campaignPrices).length > 0;
+  if (!tieneCamp) return;
+
+  const copia = items.map((it) => {
+    if (!it?.sku) return it;
+
+    const prod = productos.find((p) => p.sku === it.sku);
+    if (!prod) return it;
+
+    const precioBase = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+
+    const cantidad = Math.max(1, Number(it.cantidad || 1));
+    const precioConFlete = precioBase + fletePorUnidad;
+
+    return {
+      ...it,
+      precio: precioBase,
+      total: redondear(cantidad * precioConFlete),
+    };
+  });
+
+  setItems(copia);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [campaignPrices, productos]);
+
+
+
+
+
+
+
+
 
   const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
   const totalIVA = Math.round(total * 0.19);

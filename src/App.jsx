@@ -22,7 +22,13 @@ import Clientes from "./pages/Clientes";
 import CrearCliente from "./pages/CrearCliente";
 import EditarCliente from "./pages/EditarCliente";
 
+// MONITOREO
 import MonitoreoUsuarios from "./pages/MonitoreoUsuarios";
+
+// ✅ CAMPAÑAS
+import CampanasProductos from "./pages/CampanasProductos"; // LISTADO
+import CrearCampana from "./pages/CrearCampana";
+import EditarCampana from "./pages/EditarCampana";
 
 /* ============================================================
    WRAPPER PARA OCULTAR BANNER EN LOGIN / RESET
@@ -81,8 +87,13 @@ function LayoutWrapper() {
           <Route path="clientes/nuevo" element={<CrearCliente />} />
           <Route path="clientes/editar/:id" element={<EditarCliente />} />
 
-          {/* ✅ MONITOREO (OJO: sin / porque es hija) */}
+          {/* MONITOREO (aunque el botón esté comentado, la ruta puede existir) */}
           <Route path="monitoreo" element={<MonitoreoUsuarios />} />
+
+          {/* ✅ CAMPAÑAS */}
+          <Route path="campanas" element={<CampanasProductos />} />
+          <Route path="campanas/nueva" element={<CrearCampana />} />
+          <Route path="campanas/editar/:id" element={<EditarCampana />} />
         </Route>
 
         {/* FALLBACK */}

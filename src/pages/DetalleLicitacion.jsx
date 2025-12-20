@@ -572,6 +572,9 @@ export default function EditarLicitacion() {
     },
   ]);
 
+  // ✅ NUEVO: precios de campaña vigentes por SKU (cache)
+  const [campaignPriceBySku, setCampaignPriceBySku] = useState(new Map());
+
   const [hydrated, setHydrated] = useState(false);
 
   async function buscarClientePorRut(rut) {
@@ -964,6 +967,55 @@ export default function EditarLicitacion() {
     cargarProductos();
   }, []);
 
+  // ✅ NUEVO: cargar precios de campañas vigentes (hoy) (sin order con dot / join)
+  useEffect(() => {
+    async function cargarCampaniasVigentes() {
+      try {
+        const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+        // 1) Traer campañas vigentes
+        const { data: campaigns, error: e1 } = await supabase
+          .from("product_campaigns")
+          .select("id, created_at")
+          .lte("start_date", hoy)
+          .gte("end_date", hoy)
+          .order("created_at", { ascending: false });
+
+        if (e1) throw e1;
+
+        const ids = (campaigns || []).map((c) => c.id);
+        if (ids.length === 0) {
+          setCampaignPriceBySku(new Map());
+          return;
+        }
+
+        // 2) Traer items de campañas vigentes
+        const { data: itemsCamp, error: e2 } = await supabase
+          .from("product_campaign_items")
+          .select("sku, precio_campania, campaign_id, created_at")
+          .in("campaign_id", ids)
+          .order("created_at", { ascending: false });
+
+        if (e2) throw e2;
+
+        // 3) Map sku -> precio_campania (si está repetido, se queda el primero por el order desc)
+        const m = new Map();
+        (itemsCamp || []).forEach((row) => {
+          const sku = row?.sku;
+          if (!sku) return;
+          if (!m.has(sku)) m.set(sku, Number(row.precio_campania || 0));
+        });
+
+        setCampaignPriceBySku(m);
+      } catch (error) {
+        console.error("Error cargando campañas vigentes:", error);
+        setCampaignPriceBySku(new Map());
+      }
+    }
+
+    cargarCampaniasVigentes();
+  }, []);
+
   // Carga licitación + items desde BD (si NO hay borrador cargado)
   useEffect(() => {
     async function cargarTodoDB() {
@@ -1094,7 +1146,11 @@ export default function EditarLicitacion() {
       if (!prod) return it;
 
       const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
-      const precioBase = Number(prod[listaValida] ?? 0);
+      const precioCampania = campaignPriceBySku.get(prod.sku); // puede ser undefined
+      const precioBase =
+        precioCampania != null
+          ? Number(precioCampania)
+          : Number(prod[listaValida] ?? 0);
 
       const cantidad = Math.max(1, Number(it.cantidad || 1));
       const precioConFlete = precioBase + fletePorUnidad;
@@ -1127,7 +1183,11 @@ export default function EditarLicitacion() {
       item.producto = prod.nombre;
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
-      item.precio = Number(prod[`lista${listado}`] ?? 0);
+      const precioCampania = campaignPriceBySku.get(prod.sku);
+      item.precio =
+        precioCampania != null
+          ? Number(precioCampania)
+          : Number(prod[`lista${listado}`] ?? 0);
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
@@ -1405,8 +1465,7 @@ export default function EditarLicitacion() {
         setToast({
           type: "error",
           message:
-            `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` +
-            faltan.join("\n• "),
+            `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
         });
         return false;
       }

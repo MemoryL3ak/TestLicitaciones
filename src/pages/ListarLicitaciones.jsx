@@ -190,25 +190,25 @@ export default function ListarLicitaciones() {
           <table className="min-w-full divide-y divide-gray-300/40">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   Nombre
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   Fecha
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   Lista
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   Estado
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-left text-xs font-semibold whitespace-nowrap">
                   Creado por
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold uppercase whitespace-nowrap">
+                <th className="px-6 py-3 text-right text-xs font-semibold whitespace-nowrap">
                   Acción
                 </th>
               </tr>

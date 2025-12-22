@@ -5,12 +5,22 @@ import Toast from "../components/Toast";
 
 function formatearFecha(d) {
   if (!d) return "—";
+
+  const s = String(d);
+
+  // ✅ Si viene como "YYYY-MM-DD" (tipo DATE), formatear sin Date() para evitar desfase TZ
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s.split("-").reverse().join("-"); // dd-mm-yyyy
+  }
+
+  // fallback si viene con hora/timestamp
   try {
-    return new Date(d).toLocaleDateString("es-CL");
+    return new Date(s).toLocaleDateString("es-CL");
   } catch {
-    return String(d);
+    return s;
   }
 }
+
 
 export default function CampanasProductos() {
   const navigate = useNavigate();

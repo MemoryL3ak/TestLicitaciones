@@ -36,6 +36,9 @@ export default function Productos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState(null);
 
+  // ✅ NUEVO: precios de campaña vigentes por SKU (cache)
+  const [campaignPriceBySku, setCampaignPriceBySku] = useState(new Map());
+
   /* ============================================================
      CARGAR PRODUCTOS
   ============================================================ */
@@ -62,6 +65,42 @@ export default function Productos() {
 
   useEffect(() => {
     cargar();
+  }, []);
+
+  // ✅ NUEVO: cargar precios de campañas vigentes (hoy)
+  useEffect(() => {
+    async function cargarCampaniasVigentes() {
+      const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+      // Trae items de campañas cuyo rango incluya "hoy"
+      const { data, error } = await supabase
+        .from("product_campaign_items")
+        .select(
+          "sku, precio_campania, product_campaigns!inner(start_date, end_date, created_at)"
+        )
+        .lte("product_campaigns.start_date", hoy)
+        .gte("product_campaigns.end_date", hoy)
+        // ✅ FIX: ordenar por tabla relacionada (NO usar product_campaigns.created_at)
+        .order("created_at", { foreignTable: "product_campaigns", ascending: false });
+
+      if (error) {
+        console.error("Error cargando campañas vigentes:", error);
+        setCampaignPriceBySku(new Map());
+        return;
+      }
+
+      // sku -> precio_campania (si hay más de una campaña vigente, queda la más nueva por el order desc)
+      const m = new Map();
+      (data || []).forEach((row) => {
+        const sku = row?.sku;
+        if (!sku) return;
+        if (!m.has(sku)) m.set(sku, Number(row.precio_campania || 0));
+      });
+
+      setCampaignPriceBySku(m);
+    }
+
+    cargarCampaniasVigentes();
   }, []);
 
   /* ============================================================
@@ -241,34 +280,53 @@ export default function Productos() {
           </thead>
 
           <tbody className="divide-y divide-gray-200 bg-white">
-            {productosFiltrados.map((p) => (
-              <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 text-sm">{p.sku}</td>
-                <td className="px-6 py-3 text-sm">{p.nombre}</td>
-                <td className="px-6 py-3 text-sm">{p.marca || "—"}</td>
-                <td className="px-6 py-3 text-sm">{p.categoria}</td>
-                <td className="px-6 py-3 text-sm">{p.formato}</td>
-                <td className="px-6 py-3 text-sm font-semibold">
-                  ${Number(p.lista1 ?? 0).toLocaleString("es-CL")}
-                </td>
-                <td className="px-6 py-3">
-                  <div className="flex gap-2">
-                    <Link
-                      to={`/productos/editar/${p.id}`}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      Editar
-                    </Link>
-                    <button
-                      onClick={() => solicitarEliminacion(p)}
-                      className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {productosFiltrados.map((p) => {
+              const precioNormal = Number(p.lista1 ?? 0);
+              const precioCampania = campaignPriceBySku.get(p.sku);
+
+              return (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-3 text-sm">{p.sku}</td>
+                  <td className="px-6 py-3 text-sm">{p.nombre}</td>
+                  <td className="px-6 py-3 text-sm">{p.marca || "—"}</td>
+                  <td className="px-6 py-3 text-sm">{p.categoria}</td>
+                  <td className="px-6 py-3 text-sm">{p.formato}</td>
+
+                  {/* ✅ MODIFICADO SOLO AQUÍ: segunda línea si hay campaña vigente */}
+                  <td className="px-6 py-3 text-sm font-semibold">
+                    <div className="leading-tight">
+                      <div>${precioNormal.toLocaleString("es-CL")}</div>
+
+                      {precioCampania != null && (
+                        <div className="text-xs font-semibold text-green-700">
+                          ${Number(precioCampania).toLocaleString("es-CL")}{" "}
+                          <span className="text-[10px] font-medium text-green-700">
+                            (Campaña)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-3">
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/productos/editar/${p.id}`}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Editar
+                      </Link>
+                      <button
+                        onClick={() => solicitarEliminacion(p)}
+                        className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
 
             {productosFiltrados.length === 0 && (
               <tr>

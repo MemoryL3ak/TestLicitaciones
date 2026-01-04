@@ -962,9 +962,10 @@ useEffect(() => {
 
 
   const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-  const totalIVA = Math.round(total * 0.19);
-  const totalNeto = total - totalIVA;
-  const totalConIVA = total;
+// ✅ Si "total" es TOTAL CON IVA (como lo usas en la UI y en DB)
+const totalConIVA = total;
+const totalNeto = Math.round(totalConIVA / 1.19);
+const totalIVA = totalConIVA - totalNeto;
 
   let porcentajePresupuesto = 0;
   if (monto > 0) {

@@ -9,6 +9,8 @@ export default function EditarProducto() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
+  const [rol, setRol] = useState(null);
+
   const [producto, setProducto] = useState({
     sku: "",
     estado: "",
@@ -19,6 +21,26 @@ export default function EditarProducto() {
     lista1: 0,
     lista2: 0,
   });
+
+  /* ==========================================================
+     Cargar rol del usuario
+  ========================================================== */
+  useEffect(() => {
+    async function obtenerRol() {
+      const { data: usuario } = await supabase.auth.getUser();
+      if (!usuario?.user) return;
+
+      const { data: perfil } = await supabase
+        .from("profiles")
+        .select("rol")
+        .eq("id", usuario.user.id)
+        .single();
+
+      setRol(perfil?.rol || null);
+    }
+
+    obtenerRol();
+  }, []);
 
   /* ============================================================
      CARGAR DATOS
@@ -63,11 +85,14 @@ export default function EditarProducto() {
     const skuLimpio = producto.sku.trim();
     const nuevoEstado = skuLimpio ? "Activo" : "Transitorio";
 
+    const skuPermitido = rol === "Administrador" ? skuLimpio : null;
+    const estadoFinal = rol === "Administrador" ? nuevoEstado : "Transitorio";
+
     const { error } = await supabase
       .from("productos")
       .update({
-        sku: skuLimpio || null,
-        estado: nuevoEstado,
+        sku: skuPermitido,
+        estado: estadoFinal,
         nombre: producto.nombre,
         marca: producto.marca, // ← NUEVO
         categoria: producto.categoria,
@@ -85,6 +110,10 @@ export default function EditarProducto() {
     }
 
     setToast({ type: "success", message: "Producto actualizado" });
+
+    if (rol !== "Administrador") {
+      setProducto((prev) => ({ ...prev, sku: "", estado: "Transitorio" }));
+    }
   }
 
   if (loading) return <div className="p-6">Cargando...</div>;
@@ -130,16 +159,20 @@ export default function EditarProducto() {
             <input
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={producto.sku}
+              disabled={rol !== "Administrador"}
               onChange={(e) =>
                 setProducto({
                   ...producto,
                   sku: e.target.value,
-                  estado: e.target.value.trim()
-                    ? "Activo"
-                    : "Transitorio",
+                  estado: e.target.value.trim() ? "Activo" : "Transitorio",
                 })
               }
             />
+            {rol !== "Administrador" && (
+              <p className="text-xs text-red-600 mt-1">
+                Tu rol no permite ingresar SKU.
+              </p>
+            )}
           </div>
 
           <div>
@@ -226,19 +259,14 @@ export default function EditarProducto() {
         </div>
 
         <div className="mt-6">
-
-
-         <button
-  type="button"
-  onClick={guardarCambios}
-  className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
+          <button
+            type="button"
+            onClick={guardarCambios}
+            className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
              hover:bg-blue-700 transition-colors"
->
-  Guardar Cambios
-</button>
-
-
-
+          >
+            Guardar Cambios
+          </button>
         </div>
       </div>
     </div>

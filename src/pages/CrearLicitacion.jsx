@@ -1,8 +1,26 @@
-import React, { useEffect, useMemo, useState } from "react";
+// CrearLicitacion.jsx
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import Select, { components } from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
+
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  arrayMove,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 /* ============================================================
    TOOLTIP SOLO PARA PRODUCTO (NO TOCA EL INPUT DEL SELECT)
@@ -43,28 +61,33 @@ function formatear(valor) {
   return Number(valor).toLocaleString("es-CL");
 }
 
-
+/**
+ * ✅ FIX: si el producto NO tiene SKU, igual debe devolver precio de lista.
+ * - SKU solo se usa para campañas (si existe).
+ */
 function getPrecioBaseParaSKU(prod, listado, campaignPrices) {
-  if (!prod?.sku) return 0;
+  if (!prod) return 0;
 
-  const camp = campaignPrices?.[prod.sku];
+  const sku = String(prod?.sku ?? "").trim();
+
+  // campaña solo si existe SKU
+  const camp = sku ? campaignPrices?.[sku] : null;
   if (camp && camp.precio != null) return Number(camp.precio || 0);
 
+  // si no hay sku o no hay campaña: usa lista
   return Number(prod[`lista${listado}`] ?? 0);
 }
 
-
 /* ============================================================
    BUSCADOR MEJORADO PARA REACT-SELECT
-   - Permite "caristo 10" y matchea "caristoprevelador x 10 ml"
 ============================================================ */
 function normalizarTexto(str) {
   return (str ?? "")
     .toString()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // quita tildes
-    .replace(/[^a-z0-9\s]/g, " ") // símbolos -> espacio
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -75,8 +98,6 @@ function filtrarPorTerminos(option, inputValue) {
 
   const label = normalizarTexto(option.label);
   const terms = q.split(" ").filter(Boolean);
-
-  // Todas las palabras deben existir en el label (AND)
   return terms.every((t) => label.includes(t));
 }
 
@@ -119,6 +140,8 @@ const customStyles = {
     fontSize: "13px",
     fontFamily: "inherit",
   }),
+  // ✅ para que el menú no quede detrás de otros elementos
+  menuPortal: (base) => ({ ...base, zIndex: 99999 }),
 };
 
 const REGIONES_CHILE = {
@@ -332,6 +355,7 @@ const REGIONES_CHILE = {
     "Villa Alegre",
     "Yerbas Buenas",
   ],
+  // ✅ OJO: esta key debe ir con comillas para evitar problemas y mantener consistencia
   Ñuble: [
     "Chillán",
     "Bulnes",
@@ -343,6 +367,7 @@ const REGIONES_CHILE = {
     "San Ignacio",
     "Yungay",
     "Coelemu",
+    "Cobquecura",
     "Ninhue",
     "Portezuelo",
     "Quirihue",
@@ -492,7 +517,68 @@ const REGIONES_CHILE = {
   ],
 };
 
+// ✅ Opciones React-Select para Región/Comuna
+const opcionesRegion = Object.keys(REGIONES_CHILE).map((reg) => ({
+  value: reg,
+  label: reg,
+}));
+
+const opcionesComuna = (regionSeleccionada) =>
+  (REGIONES_CHILE[regionSeleccionada] || []).map((c) => ({
+    value: c,
+    label: c,
+  }));
+
 const STORAGE_KEY = "crear_licitacion_draft";
+
+function generarId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function crearItemVacio() {
+  return {
+    id: generarId(),
+    sku: "",
+    producto: "",
+    categoria: "",
+    formato: "",
+    cantidad: 0,
+    precio: 0,
+    total: 0,
+    observacion: "",
+    mostrarObs: false,
+  };
+}
+
+function SortableItem({ itemId, children, onInsertAfter, canInsertAfter }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: itemId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? undefined : transition,
+    willChange: "transform",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({
+        dragHandleProps: { ...attributes, ...listeners, ref: setActivatorNodeRef },
+        onInsertAfter,
+        canInsertAfter,
+        isDragging,
+      })}
+    </div>
+  );
+}
 
 /* ============================================================
    COMPONENTE PRINCIPAL
@@ -505,11 +591,9 @@ export default function CrearLicitacion() {
     y: 0,
   });
 
-  /* ============================================================
-     PERFIL / ROL (RLS)
-  ============================================================ */
+  /* PERFIL / ROL */
   const [perfilLoading, setPerfilLoading] = useState(true);
-  const [rol, setRol] = useState(null); // 'admin' | 'jefe_ventas' | 'ventas'
+  const [rol, setRol] = useState(null);
   const [perfilNombre, setPerfilNombre] = useState("");
 
   useEffect(() => {
@@ -566,7 +650,7 @@ export default function CrearLicitacion() {
   const [contacto, setContacto] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
- const [condVenta, setCondVenta] = useState("30 días");
+  const [condVenta, setCondVenta] = useState("30 días");
 
   const [fleteEstimado, setFleteEstimado] = useState(0);
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
@@ -575,23 +659,8 @@ export default function CrearLicitacion() {
 
   const [productos, setProductos] = useState([]);
   const [toast, setToast] = useState(null);
-const [campaignPrices, setCampaignPrices] = useState({});
-// { [sku]: { precio: number, producto: string|null } }
-
-  const [items, setItems] = useState([
-    {
-      sku: "",
-      producto: "",
-      categoria: "",
-      formato: "",
-      cantidad: 0,
-      precio: 0,
-      total: 0,
-      observacion: "",
-      mostrarObs: false,
-    },
-  ]);
-
+  const [campaignPrices, setCampaignPrices] = useState({});
+  const [items, setItems] = useState([crearItemVacio()]);
   const [hydrated, setHydrated] = useState(false);
 
   async function buscarClientePorRut(rut) {
@@ -601,7 +670,7 @@ const [campaignPrices, setCampaignPrices] = useState({});
       .from("clientes")
       .select("*")
       .eq("rut", rut)
-      .single();
+      .maybeSingle();
 
     if (error || !data) return;
 
@@ -617,15 +686,13 @@ const [campaignPrices, setCampaignPrices] = useState({});
     setCondVenta(data.condiciones_venta || "");
   }
 
-  /* ============================================================
-     CARGAR BORRADOR
-  ============================================================ */
+  /* CARGAR BORRADOR */
   useEffect(() => {
     const guardado = localStorage.getItem(STORAGE_KEY);
     if (!guardado) {
-    setHydrated(true);
-    return;
-  }
+      setHydrated(true);
+      return;
+    }
 
     try {
       const data = JSON.parse(guardado);
@@ -651,7 +718,16 @@ const [campaignPrices, setCampaignPrices] = useState({});
       setRegion(data.region || "");
       setComuna(data.comuna || "");
 
-      setItems(data.items || []);
+      const cargados = Array.isArray(data.items) ? data.items : [];
+      if (cargados.length > 0) {
+        setItems(
+          cargados.map((it) => ({
+            ...crearItemVacio(),
+            ...it,
+            id: it?.id || generarId(),
+          }))
+        );
+      }
     } catch (e) {
       console.error("Error cargando borrador de licitación", e);
     } finally {
@@ -659,9 +735,7 @@ const [campaignPrices, setCampaignPrices] = useState({});
     }
   }, []);
 
-  /* ============================================================
-     GUARDAR BORRADOR
-  ============================================================ */
+  /* GUARDAR BORRADOR */
   useEffect(() => {
     if (!hydrated) return;
 
@@ -711,9 +785,7 @@ const [campaignPrices, setCampaignPrices] = useState({});
     items,
   ]);
 
-  /* ============================================================
-     CARGA DE PRODUCTOS
-  ============================================================ */
+  /* CARGA DE PRODUCTOS */
   useEffect(() => {
     async function cargar() {
       const { data } = await supabase
@@ -727,104 +799,103 @@ const [campaignPrices, setCampaignPrices] = useState({});
     cargar();
   }, []);
 
-
-
   useEffect(() => {
-  let alive = true;
+    let alive = true;
 
-  async function cargarCampanasVigentes() {
-    try {
-      const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    async function cargarCampanasVigentes() {
+      try {
+        const hoy = new Date().toISOString().slice(0, 10);
 
-      // 1) campañas vigentes (prioriza la más nueva)
-      const { data: camps, error: eCamps } = await supabase
-        .from("product_campaigns")
-        .select("id, created_at, start_date, end_date")
-        .lte("start_date", hoy)
-        .gte("end_date", hoy)
-        .order("created_at", { ascending: false });
+        const { data: camps, error: eCamps } = await supabase
+          .from("product_campaigns")
+          .select("id, created_at, start_date, end_date")
+          .lte("start_date", hoy)
+          .gte("end_date", hoy)
+          .order("created_at", { ascending: false });
 
-      if (eCamps) throw eCamps;
+        if (eCamps) throw eCamps;
 
-      const ids = (camps || []).map((c) => c.id);
-      if (ids.length === 0) {
-        if (alive) setCampaignPrices({});
-        return;
-      }
+        const ids = (camps || []).map((c) => c.id);
+        if (ids.length === 0) {
+          if (alive) setCampaignPrices({});
+          return;
+        }
 
-      // 2) items de campañas vigentes
-      const { data: its, error: eIts } = await supabase
-        .from("product_campaign_items")
-        .select("campaign_id, sku, producto, precio_campania")
-        .in("campaign_id", ids);
+        const { data: its, error: eIts } = await supabase
+          .from("product_campaign_items")
+          .select("campaign_id, sku, producto, precio_campania")
+          .in("campaign_id", ids);
 
-      if (eIts) throw eIts;
+        if (eIts) throw eIts;
 
-      // 3) map sku -> precio (si un sku está en varias campañas, queda el de la más nueva)
-      const map = {};
-      for (const campId of ids) {
-        for (const it of its || []) {
-          if (it.campaign_id !== campId) continue;
+        const map = {};
+        for (const campId of ids) {
+          for (const it of its || []) {
+            if (it.campaign_id !== campId) continue;
 
-          const sku = String(it.sku || "").trim();
-          if (!sku) continue;
+            const sku = String(it.sku || "").trim();
+            if (!sku) continue;
 
-          if (map[sku] == null) {
-            map[sku] = {
-              precio: Number(it.precio_campania || 0),
-              producto: it.producto ? String(it.producto) : null,
-            };
+            if (map[sku] == null) {
+              map[sku] = {
+                precio: Number(it.precio_campania || 0),
+                producto: it.producto ? String(it.producto) : null,
+              };
+            }
           }
         }
+
+        if (alive) setCampaignPrices(map);
+      } catch (err) {
+        console.error("Error cargando campañas vigentes:", err);
+        if (alive) setCampaignPrices({});
       }
-
-      if (alive) setCampaignPrices(map);
-    } catch (err) {
-      console.error("Error cargando campañas vigentes:", err);
-      if (alive) setCampaignPrices({});
     }
-  }
 
-  cargarCampanasVigentes();
-
-  return () => {
-    alive = false;
-  };
-}, []);
-
+    cargarCampanasVigentes();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* ============================================================
-     CAMBIO DE LISTA DE PRECIOS
+     RESUMEN (para flete)
   ============================================================ */
- function actualizarPreciosPorLista(nuevaLista) {
-  const copia = items.map((it) => {
-    if (!it.sku) return it;
+  const cantidadProductos = items.reduce(
+    (acc, it) => acc + Number(it.cantidad || 0),
+    0
+  );
 
-    const prod = productos.find((p) => p.sku === it.sku);
-    if (!prod) return it;
+  const fletePorUnidad =
+    cantidadProductos > 0
+      ? redondear(Number(fleteEstimado) / cantidadProductos)
+      : 0;
 
-    // ✅ si hay campaña vigente para este SKU, NO se pisa con lista
-    const camp = campaignPrices?.[it.sku];
-    const precio =
-      camp && camp.precio != null
-        ? Number(camp.precio || 0)
-        : Number(prod[nuevaLista === "2" ? "lista2" : "lista1"] ?? 0);
+  /* ============================================================
+     CAMBIO DE LISTA (✅ FIX: funciona aunque falte SKU)
+  ============================================================ */
+  function actualizarPreciosPorLista(nuevaLista) {
+    const copia = items.map((it) => {
+      const sku = String(it.sku || "").trim();
+      const prod =
+        (sku ? productos.find((p) => String(p.sku || "").trim() === sku) : null) ||
+        (it.producto ? productos.find((p) => p.nombre === it.producto) : null);
 
-    const cantidad = Math.max(1, Number(it.cantidad || 1));
-    const precioConFlete = precio + fletePorUnidad;
+      if (!prod) return it;
 
-    return {
-      ...it,
-      precio,
-      total: redondear(cantidad * precioConFlete),
-    };
-  });
+      const precioBase = getPrecioBaseParaSKU(prod, nuevaLista, campaignPrices);
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioConFlete = precioBase + fletePorUnidad;
 
-  setItems(copia);
-}
+      return {
+        ...it,
+        precio: precioBase,
+        total: redondear(cantidad * precioConFlete),
+      };
+    });
 
-
-
+    setItems(copia);
+  }
 
   /* ============================================================
      ACTUALIZAR ÍTEM
@@ -836,17 +907,21 @@ const [campaignPrices, setCampaignPrices] = useState({});
     item[campo] = valor;
 
     let prod = null;
-    if (campo === "sku") prod = productos.find((p) => p.sku === valor);
-    if (campo === "producto") prod = productos.find((p) => p.nombre === valor);
+    if (campo === "sku") {
+      prod = productos.find(
+        (p) => String(p.sku || "").trim() === String(valor || "").trim()
+      );
+    }
+    if (campo === "producto") {
+      prod = productos.find((p) => p.nombre === valor);
+    }
 
     if (prod) {
-      item.sku = prod.sku;
-      item.producto = prod.nombre;
+      item.sku = prod.sku ? String(prod.sku).trim() : "";
+      item.producto = prod.nombre || "";
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
-      
-    // ✅ campaña vigente si existe; si no, lista seleccionada
-  item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+      item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
@@ -859,9 +934,7 @@ const [campaignPrices, setCampaignPrices] = useState({});
     setItems(copia);
   }
 
-  /* ============================================================
-     OBSERVACIÓN / AGREGAR / ELIMINAR
-  ============================================================ */
+  /* OBS / CRUD */
   function toggleObservacion(index) {
     const copia = [...items];
     copia[index].mostrarObs = !copia[index].mostrarObs;
@@ -869,20 +942,13 @@ const [campaignPrices, setCampaignPrices] = useState({});
   }
 
   function agregarItem() {
-    setItems([
-      ...items,
-      {
-        sku: "",
-        producto: "",
-        categoria: "",
-        formato: "",
-        cantidad: 0,
-        precio: 0,
-        total: 0,
-        observacion: "",
-        mostrarObs: false,
-      },
-    ]);
+    setItems([...items, crearItemVacio()]);
+  }
+
+  function insertarItemDespues(index) {
+    const copia = [...items];
+    copia.splice(index + 1, 0, crearItemVacio());
+    setItems(copia);
   }
 
   function eliminarItem(index) {
@@ -892,19 +958,7 @@ const [campaignPrices, setCampaignPrices] = useState({});
     setItems(copia);
   }
 
-  /* ============================================================
-     RESUMEN
-  ============================================================ */
-  const cantidadProductos = items.reduce(
-    (acc, it) => acc + Number(it.cantidad || 0),
-    0
-  );
-
-  const fletePorUnidad =
-    cantidadProductos > 0
-      ? redondear(Number(fleteEstimado) / cantidadProductos)
-      : 0;
-
+  /* recalcular totales con flete */
   useEffect(() => {
     if (!hydrated) return;
 
@@ -923,49 +977,40 @@ const [campaignPrices, setCampaignPrices] = useState({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fletePorUnidad, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!productos?.length) return;
 
-useEffect(() => {
-  if (!hydrated) return;
-  if (!productos?.length) return;
+    const tieneCamp = campaignPrices && Object.keys(campaignPrices).length > 0;
+    if (!tieneCamp) return;
 
-  const tieneCamp = campaignPrices && Object.keys(campaignPrices).length > 0;
-  if (!tieneCamp) return;
+    const copia = items.map((it) => {
+      const sku = String(it.sku || "").trim();
+      const prod =
+        (sku ? productos.find((p) => String(p.sku || "").trim() === sku) : null) ||
+        (it.producto ? productos.find((p) => p.nombre === it.producto) : null);
 
-  const copia = items.map((it) => {
-    if (!it?.sku) return it;
+      if (!prod) return it;
 
-    const prod = productos.find((p) => p.sku === it.sku);
-    if (!prod) return it;
+      const precioBase = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioConFlete = precioBase + fletePorUnidad;
 
-    const precioBase = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+      return {
+        ...it,
+        precio: precioBase,
+        total: redondear(cantidad * precioConFlete),
+      };
+    });
 
-    const cantidad = Math.max(1, Number(it.cantidad || 1));
-    const precioConFlete = precioBase + fletePorUnidad;
-
-    return {
-      ...it,
-      precio: precioBase,
-      total: redondear(cantidad * precioConFlete),
-    };
-  });
-
-  setItems(copia);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [campaignPrices, productos]);
-
-
-
-
-
-
-
-
+    setItems(copia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignPrices, productos]);
 
   const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-// ✅ Si "total" es TOTAL CON IVA (como lo usas en la UI y en DB)
-const totalConIVA = total;
-const totalNeto = Math.round(totalConIVA / 1.19);
-const totalIVA = totalConIVA - totalNeto;
+  const totalConIVA = total;
+  const totalNeto = Math.round(totalConIVA / 1.19);
+  const totalIVA = totalConIVA - totalNeto;
 
   let porcentajePresupuesto = 0;
   if (monto > 0) {
@@ -982,11 +1027,16 @@ const totalIVA = totalConIVA - totalNeto;
   async function crearClienteSiNoExiste() {
     if (!rutEntidad) return;
 
-    const { data: existe } = await supabase
+    const { data: existe, error: errExiste } = await supabase
       .from("clientes")
       .select("id")
       .eq("rut", rutEntidad)
-      .single();
+      .maybeSingle();
+
+    if (errExiste) {
+      console.error("Error verificando cliente:", errExiste);
+      throw new Error("No se pudo verificar el cliente");
+    }
 
     if (existe) return;
 
@@ -1032,20 +1082,7 @@ const totalIVA = totalConIVA - totalNeto;
     setCondVenta("");
 
     setFleteEstimado(0);
-
-    setItems([
-      {
-        sku: "",
-        producto: "",
-        categoria: "",
-        formato: "",
-        cantidad: 0,
-        precio: 0,
-        total: 0,
-        observacion: "",
-        mostrarObs: false,
-      },
-    ]);
+    setItems([crearItemVacio()]);
 
     setToast({
       type: "success",
@@ -1054,7 +1091,7 @@ const totalIVA = totalConIVA - totalNeto;
   }
 
   /* ============================================================
-     GUARDAR LICITACIÓN
+     GUARDAR LICITACIÓN (✅ FIX: SKU null si viene vacío)
   ============================================================ */
   async function guardarLicitacion() {
     setToast(null);
@@ -1075,7 +1112,6 @@ const totalIVA = totalConIVA - totalNeto;
     if (!rutEntidad) errores.push("RUT Entidad");
     if (!nombreEntidad) errores.push("Nombre Entidad");
     if (!departamento) errores.push("Departamento");
-    if (!municipalidad) errores.push("Municipalidad");
     if (!tipoCompra) errores.push("Tipo de Compra");
     if (!region) errores.push("Región");
     if (!comuna) errores.push("Comuna");
@@ -1108,7 +1144,6 @@ const totalIVA = totalConIVA - totalNeto;
       return;
     }
 
-    // ✅ created_by para RLS (y dejo creado_por si tu columna existe)
     const { data: lic, error } = await supabase
       .from("licitaciones")
       .insert([
@@ -1133,14 +1168,14 @@ const totalIVA = totalConIVA - totalNeto;
           condicion_venta: condVenta,
 
           fecha: fechaHoy,
-          creado_por: user.email, // si existe en tu tabla
+          creado_por: user.email,
           estado: "En espera",
           flete_estimado: Number(fleteEstimado),
           total_con_iva: totalConIVA,
           total_sin_iva: totalNeto,
           total_iva: totalIVA,
 
-          created_by: user.id, // ✅ clave para RLS
+          created_by: user.id,
         },
       ])
       .select("id")
@@ -1155,6 +1190,8 @@ const totalIVA = totalConIVA - totalNeto;
     const idLicitacion = lic.id;
 
     for (const it of items) {
+      const skuLimpio = String(it.sku || "").trim();
+
       await supabase.from("items_licitacion").insert([
         {
           licitacion_id: idLicitacion,
@@ -1162,7 +1199,7 @@ const totalIVA = totalConIVA - totalNeto;
           formato: it.formato,
           cantidad: Number(it.cantidad),
           valor_unitario: Number(it.precio) + fletePorUnidad,
-          sku: it.sku,
+          sku: skuLimpio ? skuLimpio : null,
           total: Number(it.total),
           categoria: it.categoria,
           observacion: it.observacion,
@@ -1170,6 +1207,7 @@ const totalIVA = totalConIVA - totalNeto;
       ]);
     }
 
+    // ✅ PDF con N° ítem
     await generarPDFcotizacion({
       numero_licitacion: idLicitacion,
       fecha_emision: fechaHoy,
@@ -1184,13 +1222,16 @@ const totalIVA = totalConIVA - totalNeto;
       condicion_venta: condVenta,
 
       items_tabla: items
-        .map((it) => {
+        .map((it, idx) => {
+          const skuTxt = String(it.sku || "").trim();
+
           const fila = `
             <tr>
-              <td>${it.sku}</td>
+              <td style="text-align:center; font-weight:bold;">${idx + 1}</td>
+              <td>${skuTxt}</td>
               <td>${it.producto}</td>
               <td>${it.formato}</td>
-              <td>${it.cantidad}</td>
+              <td style="text-align:center;">${it.cantidad}</td>
               <td>$ ${formatear(Number(it.precio) + fletePorUnidad)}</td>
               <td>$ ${formatear(it.total)}</td>
             </tr>
@@ -1199,6 +1240,7 @@ const totalIVA = totalConIVA - totalNeto;
           const filaObs = it.observacion
             ? `
             <tr>
+              <td></td>
               <td></td>
               <td colspan="5" style="font-style: italic; color: #444;">
                 Observación: ${it.observacion}
@@ -1221,27 +1263,45 @@ const totalIVA = totalConIVA - totalNeto;
     });
 
     localStorage.removeItem(STORAGE_KEY);
-
-    // Reset
     limpiarDatos();
   }
 
   /* ============================================================
-     OPCIONES SELECT
+     OPCIONES SELECT (✅ SKU: solo productos con SKU)
   ============================================================ */
-  const opcionesSKU = productos.map((p) => ({
-    value: p.sku,
-    label: p.sku,
-  }));
+  const opcionesSKU = productos
+    .filter((p) => String(p.sku || "").trim() !== "")
+    .map((p) => ({
+      value: String(p.sku).trim(),
+      label: String(p.sku).trim(),
+    }));
 
   const opcionesProducto = productos.map((p) => ({
     value: p.nombre,
     label: p.nombre,
   }));
 
-  /* ============================================================
-     UI
-  ============================================================ */
+  /* DRAG & DROP */
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = useCallback(
+    (event) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = items.findIndex((it) => it.id === active.id);
+      const newIndex = items.findIndex((it) => it.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      setItems((prev) => arrayMove(prev, oldIndex, newIndex));
+    },
+    [items]
+  );
+
+  /* UI */
   if (perfilLoading) {
     return <div className="p-8 text-gray-600">Cargando perfil…</div>;
   }
@@ -1266,7 +1326,7 @@ const totalIVA = totalConIVA - totalNeto;
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-8">
+    <div className="w-full max-w-none mx-auto p-8">
       {/* Tooltip Animado Azul */}
       {tooltip.visible && (
         <div
@@ -1313,7 +1373,6 @@ const totalIVA = totalConIVA - totalNeto;
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               ID Licitación *
@@ -1325,7 +1384,6 @@ const totalIVA = totalConIVA - totalNeto;
             />
           </div>
 
-          {/* NOMBRE */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre Licitación *
@@ -1337,7 +1395,6 @@ const totalIVA = totalConIVA - totalNeto;
             />
           </div>
 
-          {/* FECHA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha y Hora de Cierre *
@@ -1350,7 +1407,6 @@ const totalIVA = totalConIVA - totalNeto;
             />
           </div>
 
-          {/* MONTO */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Monto Presupuesto *
@@ -1363,7 +1419,6 @@ const totalIVA = totalConIVA - totalNeto;
             />
           </div>
 
-          {/* LISTA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Lista de Precios *
@@ -1381,7 +1436,6 @@ const totalIVA = totalConIVA - totalNeto;
             </select>
           </div>
 
-          {/* TIPO DE COMPRA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Tipo de Compra *
@@ -1421,12 +1475,10 @@ const totalIVA = totalConIVA - totalNeto;
         }`}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* RUT */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               RUT *
             </label>
-
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={rutEntidad}
@@ -1459,7 +1511,7 @@ const totalIVA = totalConIVA - totalNeto;
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Municipalidad *
+              Municipalidad
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -1468,47 +1520,45 @@ const totalIVA = totalConIVA - totalNeto;
             />
           </div>
 
+          {/* ✅ REGIÓN con react-select (buscable) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Región *
             </label>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={region}
-              onChange={(e) => {
-                setRegion(e.target.value);
-                setComuna("");
+
+            <Select
+              options={opcionesRegion}
+              styles={customStyles}
+              placeholder="Seleccione región…"
+              menuPortalTarget={document.body}
+              isSearchable={true}
+              filterOption={filtrarPorTerminos}
+              value={opcionesRegion.find((o) => o.value === region) || null}
+              onChange={(op) => {
+                const nuevaRegion = op ? op.value : "";
+                setRegion(nuevaRegion);
+                setComuna(""); // ✅ reset comuna al cambiar región
               }}
-            >
-              <option value="">Seleccione región</option>
-              {Object.keys(REGIONES_CHILE).map((reg) => (
-                <option key={reg} value={reg}>
-                  {reg}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
+          {/* ✅ COMUNA con react-select (buscable) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Comuna *
             </label>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-              value={comuna}
-              onChange={(e) => setComuna(e.target.value)}
-              disabled={!region}
-            >
-              <option value="">
-                {region ? "Seleccione comuna" : "Seleccione región primero"}
-              </option>
-              {region &&
-                REGIONES_CHILE[region]?.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-            </select>
+
+            <Select
+              options={opcionesComuna(region)}
+              styles={customStyles}
+              placeholder={region ? "Seleccione comuna…" : "Seleccione región primero"}
+              menuPortalTarget={document.body}
+              isSearchable={true}
+              filterOption={filtrarPorTerminos}
+              isDisabled={!region}
+              value={opcionesComuna(region).find((o) => o.value === comuna) || null}
+              onChange={(op) => setComuna(op ? op.value : "")}
+            />
           </div>
 
           <div>
@@ -1524,7 +1574,7 @@ const totalIVA = totalConIVA - totalNeto;
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contacto *
+              Contacto
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -1535,7 +1585,7 @@ const totalIVA = totalConIVA - totalNeto;
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email *
+              Email
             </label>
             <input
               type="email"
@@ -1547,7 +1597,7 @@ const totalIVA = totalConIVA - totalNeto;
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono *
+              Teléfono
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -1557,26 +1607,18 @@ const totalIVA = totalConIVA - totalNeto;
           </div>
 
           <div>
-
-
-         <label className="block text-sm font-medium text-gray-700 mb-1">
-  Condiciones de Venta *
-</label>
-
-<select
-  className="w-full rounded-md border border-gray-300 px-3 py-2"
-  value={condVenta}
-  onChange={(e) => setCondVenta(e.target.value)}
->
-  <option value="">Seleccione…</option>
-  <option value="30 días">30 días</option>
-  <option value="Contado">Contado</option>
-</select>
-
-
-
-
-
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Condiciones de Venta *
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+              value={condVenta}
+              onChange={(e) => setCondVenta(e.target.value)}
+            >
+              <option value="">Seleccione…</option>
+              <option value="30 días">30 días</option>
+              <option value="Contado">Contado</option>
+            </select>
           </div>
         </div>
       </div>
@@ -1586,165 +1628,218 @@ const totalIVA = totalConIVA - totalNeto;
       ============================================================ */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">Ítems</h2>
 
-      <div className="space-y-6 max-h-[480px] overflow-y-auto overflow-x-auto pr-2">
-        {items.map((it, index) => (
-          <div
-            key={index}
-            className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-18 gap-4 items-end">
-              {/* SKU */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">SKU</label>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={items.map((it) => it.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-6 max-h-[480px] overflow-y-auto pr-2">
+            {items.map((it, index) => (
+              <SortableItem
+                key={it.id}
+                itemId={it.id}
+                onInsertAfter={() => insertarItemDespues(index)}
+                canInsertAfter={true}
+              >
+                {({ dragHandleProps, onInsertAfter }) => (
+                  <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3">
+                    {/* ✅ 24 columnas */}
+                    <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] gap-4 items-end">
+                      {/* Items */}
+                      <div className="md:col-span-1">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Items
+                        </label>
+                        <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center justify-center font-semibold bg-gray-50">
+                          {index + 1}
+                        </div>
+                      </div>
 
-                <Select
-                  options={opcionesSKU}
-                  styles={customStyles}
-                  placeholder="Seleccione SKU…"
-                  menuPortalTarget={document.body}
-                  isSearchable={true}
-                  filterOption={filtrarPorTerminos} // ✅ FIX búsquedas tipo "abc 10"
-                  value={opcionesSKU.find((o) => o.value === it.sku) || null}
-                  onChange={(op) =>
-                    actualizarItem(index, "sku", op ? op.value : "")
-                  }
-                />
-              </div>
+                      {/* SKU */}
+                      <div className="md:col-span-3">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          SKU
+                        </label>
+                        <Select
+                          options={opcionesSKU}
+                          styles={customStyles}
+                          placeholder="Seleccione SKU…"
+                          menuPortalTarget={document.body}
+                          isSearchable={true}
+                          filterOption={filtrarPorTerminos}
+                          value={opcionesSKU.find((o) => o.value === it.sku) || null}
+                          onChange={(op) =>
+                            actualizarItem(index, "sku", op ? op.value : "")
+                          }
+                        />
+                      </div>
 
-              {/* PRODUCTO */}
-              <div className="md:col-span-4">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Producto
-                </label>
+                      {/* Producto */}
+                      <div className="md:col-span-5">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Producto
+                        </label>
+                        <Select
+                          options={opcionesProducto}
+                          styles={customStyles}
+                          placeholder="Seleccione producto…"
+                          menuPortalTarget={document.body}
+                          isSearchable={true}
+                          filterOption={filtrarPorTerminos}
+                          value={
+                            opcionesProducto.find((o) => o.value === it.producto) ||
+                            null
+                          }
+                          onChange={(op) =>
+                            actualizarItem(index, "producto", op ? op.value : "")
+                          }
+                          components={{ SingleValue: ProductoSingleValue }}
+                          setTooltip={setTooltip}
+                        />
+                      </div>
 
-                <Select
-                  options={opcionesProducto}
-                  styles={customStyles}
-                  placeholder="Seleccione producto…"
-                  menuPortalTarget={document.body}
-                  isSearchable={true}
-                  filterOption={filtrarPorTerminos} // ✅ FIX búsquedas tipo "caristo 10"
-                  value={
-                    opcionesProducto.find((o) => o.value === it.producto) ||
-                    null
-                  }
-                  onChange={(op) =>
-                    actualizarItem(index, "producto", op ? op.value : "")
-                  }
-                  components={{ SingleValue: ProductoSingleValue }}
-setTooltip={setTooltip}
-                />
-              </div>
+                      {/* Categoría */}
+                      <div className="md:col-span-3">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Categoría
+                        </label>
+                        <input
+                          className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-4 text-[13px] truncate"
+                          value={it.categoria}
+                          readOnly
+                        />
+                      </div>
 
-              {/* CATEGORÍA */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Categoría
-                </label>
-                <input
-                  className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-3 text-[13px]"
-                  value={it.categoria}
-                  readOnly
-                />
-              </div>
+                      {/* Formato */}
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Formato
+                        </label>
+                        <input
+                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                          value={it.formato}
+                          onChange={(e) =>
+                            actualizarItem(index, "formato", e.target.value)
+                          }
+                        />
+                      </div>
 
-              {/* FORMATO */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Formato
-                </label>
-                <input
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-                  value={it.formato}
-                  onChange={(e) =>
-                    actualizarItem(index, "formato", e.target.value)
-                  }
-                />
-              </div>
+                      {/* Cantidad */}
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Cantidad
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                          value={it.cantidad}
+                          onInput={(e) => {
+                            e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                            if (e.target.value === "" || Number(e.target.value) <= 0) {
+                              e.target.value = "1";
+                            }
+                          }}
+                          onChange={(e) =>
+                            actualizarItem(index, "cantidad", e.target.value)
+                          }
+                        />
+                      </div>
 
-              {/* CANTIDAD */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Cantidad
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-                  value={it.cantidad}
-                  onInput={(e) => {
-                    e.target.value = e.target.value.replace(/[^0-9]/g, "");
-                    if (e.target.value === "" || Number(e.target.value) <= 0) {
-                      e.target.value = "1";
-                    }
-                  }}
-                  onChange={(e) =>
-                    actualizarItem(index, "cantidad", e.target.value)
-                  }
-                />
-              </div>
+                      {/* Precio Unitario */}
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Precio Unitario
+                        </label>
+                        <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
+                          ${(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
+                        </div>
+                      </div>
 
-              {/* PRECIO UNITARIO */}
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
-                  Precio Unitario
-                </label>
-                <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
-                  ${(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
-                </div>
-              </div>
+                      {/* Total */}
+                      <div className="md:col-span-4">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Total
+                        </label>
+                        <div className="h-10 flex items-center font-semibold whitespace-nowrap">
+                          ${Number(it.total).toLocaleString("es-CL")}
+                        </div>
+                      </div>
 
-              {/* TOTAL */}
-              <div className="md:col-span-1">
-                <label className="block text-xs text-gray-600 mb-1">Total</label>
-                <div className="h-10 flex items-center font-semibold">
-                  ${Number(it.total).toLocaleString("es-CL")}
-                </div>
-              </div>
+                      {/* Acciones */}
+                      <div className="md:col-span-2 flex justify-end pr-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleObservacion(index)}
+                            className="cursor-pointer bg-gray-300 rounded-md w-10 h-10 text-base shadow hover:bg-gray-400 flex items-center justify-center"
+                            title="Observación"
+                          >
+                            {it.mostrarObs ? "–" : "+"}
+                          </button>
 
-              {/* MOSTRAR OBS */}
-              <div className="md:col-span-1 flex justify-center">
-                <button
-                  onClick={() => toggleObservacion(index)}
-                  className="cursor-pointer bg-gray-300 rounded-md px-3 py-1 text-sm shadow hover:bg-gray-400"
-                >
-                  {it.mostrarObs ? "–" : "+"}
-                </button>
-              </div>
+                          {items.length > 1 && (
+                            <button
+                              onClick={() => eliminarItem(index)}
+                              className="cursor-pointer bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow hover:bg-red-700"
+                            >
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-              {/* ELIMINAR */}
-              <div className="md:col-span-1 flex justify-center">
-                {items.length > 1 && (
-                  <button
-                    onClick={() => eliminarItem(index)}
-                    className="cursor-pointer bg-red-600 text-white px-3 py-1 rounded-md text-sm shadow hover:bg-red-700"
-                  >
-                    Eliminar
-                  </button>
+                    {/* controles */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        ref={dragHandleProps.ref}
+                        {...dragHandleProps}
+                        className="cursor-grab active:cursor-grabbing bg-gray-200 rounded-md w-9 h-9 shadow hover:bg-gray-300 flex items-center justify-center"
+                        style={{ touchAction: "none" }}
+                        title="Arrastrar para reordenar"
+                        type="button"
+                      >
+                        ≡
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={onInsertAfter}
+                        className="cursor-pointer bg-green-600 text-white rounded-md w-9 h-9 shadow hover:bg-green-700 flex items-center justify-center"
+                        title="Agregar ítem debajo"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {/* Observación */}
+                    {it.mostrarObs && (
+                      <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] transition-all">
+                        <div className="md:col-span-12">
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Observación
+                          </label>
+                          <input
+                            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                            value={it.observacion}
+                            onChange={(e) =>
+                              actualizarItem(index, "observacion", e.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
-            </div>
-
-            {/* OBSERVACIÓN */}
-            {it.mostrarObs && (
-              <div className="grid grid-cols-1 md:grid-cols-18 transition-all">
-                <div className="md:col-span-10">
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Observación
-                  </label>
-                  <input
-                    className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
-                    value={it.observacion}
-                    onChange={(e) =>
-                      actualizarItem(index, "observacion", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            )}
+              </SortableItem>
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {/* ============================================================
           RESUMEN

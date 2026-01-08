@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// CrearProducto.jsx
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import { Link } from "react-router-dom";
@@ -7,7 +8,7 @@ export default function CrearProducto() {
   const [sku, setSku] = useState("");
   const [estado, setEstado] = useState("Transitorio");
   const [nombre, setNombre] = useState("");
-  const [marca, setMarca] = useState(""); // ← NUEVO
+  const [marca, setMarca] = useState("");
   const [categoria, setCategoria] = useState("");
   const [formato, setFormato] = useState("");
 
@@ -19,34 +20,63 @@ export default function CrearProducto() {
   });
 
   const [toast, setToast] = useState(null);
+
   const [rol, setRol] = useState(null);
+  const [rolLoading, setRolLoading] = useState(true);
 
   /* ==========================================================
      Cargar rol del usuario
   ========================================================== */
   useEffect(() => {
+    let alive = true;
+
     async function obtenerRol() {
-      const { data: usuario } = await supabase.auth.getUser();
-      if (!usuario?.user) return;
+      try {
+        setRolLoading(true);
 
-      const { data: perfil } = await supabase
-        .from("profiles")
-        .select("rol")
-        .eq("id", usuario.user.id)
-        .single();
+        const { data: usuario, error: eUser } = await supabase.auth.getUser();
+        if (eUser || !usuario?.user) {
+          if (alive) setRol(null);
+          return;
+        }
 
-      setRol(perfil?.rol || null);
+        const { data: perfil, error: ePerfil } = await supabase
+          .from("profiles")
+          .select("rol")
+          .eq("id", usuario.user.id)
+          .single();
+
+        if (ePerfil) {
+          console.error("Error obteniendo rol:", ePerfil);
+          if (alive) setRol(null);
+          return;
+        }
+
+        if (alive) setRol(perfil?.rol ?? null);
+      } finally {
+        if (alive) setRolLoading(false);
+      }
     }
 
     obtenerRol();
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  // ✅ En tu DB el rol es "admin" (según tu screenshot), no "Administrador"
+  const puedeIngresarSKU = useMemo(() => {
+    return rol === "admin" || rol === "Administrador"; // por si tienes datos antiguos
+  }, [rol]);
+
   function actualizarPrecio(lista, valor) {
-    setPrecios({ ...precios, [lista]: valor });
+    setPrecios((prev) => ({ ...prev, [lista]: valor }));
   }
 
   async function guardarProducto() {
-    const skuLimpio = sku.trim();
+    setToast(null);
+
+    const skuLimpio = (sku ?? "").toString().trim().toUpperCase();
     const estadoFinal = skuLimpio ? "Activo" : "Transitorio";
 
     if (!nombre || !categoria || !formato) {
@@ -57,14 +87,15 @@ export default function CrearProducto() {
       return;
     }
 
-    const skuPermitido = rol === "Administrador" ? skuLimpio : null;
+    // ✅ Solo admin puede enviar sku; el resto lo manda null
+    const skuPermitido = puedeIngresarSKU ? skuLimpio : null;
 
     const { error } = await supabase.from("productos").insert([
       {
         sku: skuPermitido,
         estado: estadoFinal,
         nombre,
-        marca, // ← NUEVO
+        marca,
         categoria,
         formato,
         lista1: Number(precios.lista1) || 0,
@@ -91,7 +122,7 @@ export default function CrearProducto() {
     setSku("");
     setEstado("Transitorio");
     setNombre("");
-    setMarca(""); // ← RESET
+    setMarca("");
     setCategoria("");
     setFormato("");
     setPrecios({ lista1: "", lista2: "", lista3: "", lista4: "" });
@@ -140,17 +171,24 @@ export default function CrearProducto() {
             <input
               className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
               value={sku}
-              disabled={rol !== "Administrador"}
+              disabled={rolLoading || !puedeIngresarSKU}
               onChange={(e) => {
-                const val = e.target.value;
+                const val = e.target.value.toUpperCase(); // opcional: fuerza mayúsculas
                 setSku(val);
                 setEstado(val.trim() ? "Activo" : "Transitorio");
               }}
               placeholder="Ej: PH00001"
             />
-            {rol !== "Administrador" && (
+
+            {rolLoading ? (
+              <p className="text-xs text-gray-500 mt-1">Cargando permisos…</p>
+            ) : !puedeIngresarSKU ? (
               <p className="text-xs text-red-600 mt-1">
                 Tu rol no permite ingresar SKU.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">
+                Solo admin puede asignar SKU (opcional).
               </p>
             )}
           </div>
@@ -222,9 +260,7 @@ export default function CrearProducto() {
                     type="number"
                     className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
                     value={precios[list]}
-                    onChange={(e) =>
-                      actualizarPrecio(list, e.target.value)
-                    }
+                    onChange={(e) => actualizarPrecio(list, e.target.value)}
                   />
                 </div>
               ))}
@@ -233,16 +269,13 @@ export default function CrearProducto() {
         </div>
 
         <div className="mt-6">
-
-       <button
-  type="button"
-  onClick={guardarProducto}   // o guardarCambios
-  className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
-             hover:bg-blue-700 transition-colors"
->
-  Guardar Producto
-</button>
-
+          <button
+            type="button"
+            onClick={guardarProducto}
+            className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 transition-colors"
+          >
+            Guardar Producto
+          </button>
         </div>
       </div>
     </div>

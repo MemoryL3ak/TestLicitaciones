@@ -6,21 +6,20 @@ import Select from "react-select";
 
 /* ============================================================
    HELPERS FILTRO PRODUCTO (TOKENS + NORMALIZACIÓN)
-   - Permite buscar "caristo 10" y matchear "CARISTOPREVELADOR X 10 ML"
 ============================================================ */
 function normalizarTexto(s = "") {
   return s
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // quita tildes
-    .replace(/[^a-z0-9]+/g, " ") // deja letras/números, lo demás a espacio
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
 function contieneTodosLosTokens(texto, query) {
   const t = normalizarTexto(texto);
   const tokens = normalizarTexto(query).split(" ").filter(Boolean);
-  if (tokens.length === 0) return true; // si no hay filtro, no restringe
+  if (tokens.length === 0) return true;
   return tokens.every((tok) => t.includes(tok));
 }
 
@@ -30,14 +29,49 @@ export default function Productos() {
   const [filtroSKU, setFiltroSKU] = useState("");
   const [filtroProducto, setFiltroProducto] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
-  const [filtroMarcas, setFiltroMarcas] = useState([]); // ← react-select
+  const [filtroMarcas, setFiltroMarcas] = useState([]);
   const [ordenPrecio, setOrdenPrecio] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState(null);
 
-  // ✅ NUEVO: precios de campaña vigentes por SKU (cache)
+  // ✅ precios de campaña vigentes por SKU (cache)
   const [campaignPriceBySku, setCampaignPriceBySku] = useState(new Map());
+
+  // ✅ PERFIL / ROL
+  const [perfilLoading, setPerfilLoading] = useState(true);
+  const [rol, setRol] = useState(null);
+
+  useEffect(() => {
+    async function cargarPerfil() {
+      setPerfilLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+
+      if (!user) {
+        setRol(null);
+        setPerfilLoading(false);
+        return;
+      }
+
+      const { data: perfil } = await supabase
+        .from("profiles")
+        .select("rol")
+        .eq("id", user.id)
+        .single();
+
+      setRol(perfil?.rol ?? null);
+      setPerfilLoading(false);
+    }
+
+    cargarPerfil();
+  }, []);
+
+  // ✅ Ventas NO puede editar (ni eliminar)
+  const puedeEditarProductos = useMemo(() => {
+    return rol !== "ventas"; // ventas bloqueado; admin/jefe_ventas/etc permitido
+  }, [rol]);
 
   /* ============================================================
      CARGAR PRODUCTOS
@@ -67,12 +101,13 @@ export default function Productos() {
     cargar();
   }, []);
 
-  // ✅ NUEVO: cargar precios de campañas vigentes (hoy)
+  /* ============================================================
+     CARGAR PRECIOS DE CAMPAÑAS VIGENTES (HOY)
+  ============================================================ */
   useEffect(() => {
     async function cargarCampaniasVigentes() {
-      const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const hoy = new Date().toISOString().slice(0, 10);
 
-      // Trae items de campañas cuyo rango incluya "hoy"
       const { data, error } = await supabase
         .from("product_campaign_items")
         .select(
@@ -80,8 +115,10 @@ export default function Productos() {
         )
         .lte("product_campaigns.start_date", hoy)
         .gte("product_campaigns.end_date", hoy)
-        // ✅ FIX: ordenar por tabla relacionada (NO usar product_campaigns.created_at)
-        .order("created_at", { foreignTable: "product_campaigns", ascending: false });
+        .order("created_at", {
+          foreignTable: "product_campaigns",
+          ascending: false,
+        });
 
       if (error) {
         console.error("Error cargando campañas vigentes:", error);
@@ -89,7 +126,6 @@ export default function Productos() {
         return;
       }
 
-      // sku -> precio_campania (si hay más de una campaña vigente, queda la más nueva por el order desc)
       const m = new Map();
       (data || []).forEach((row) => {
         const sku = row?.sku;
@@ -105,7 +141,6 @@ export default function Productos() {
 
   /* ============================================================
      MARCAS DISPONIBLES (DINÁMICAS SEGÚN FILTRO PRODUCTO)
-     ✅ AHORA USA TOKENS (NO SUBSTRING CONTIGUA)
   ============================================================ */
   const marcasDisponibles = useMemo(() => {
     const marcas = productos
@@ -125,10 +160,7 @@ export default function Productos() {
   const productosFiltrados = productos
     .filter((p) => {
       const matchSKU = p.sku.toLowerCase().includes(filtroSKU.toLowerCase());
-
-      // ✅ AHORA USA TOKENS (NO SUBSTRING CONTIGUA)
       const matchProducto = contieneTodosLosTokens(p.nombre, filtroProducto);
-
       const matchCategoria = filtroCategoria ? p.categoria === filtroCategoria : true;
 
       const matchMarca =
@@ -162,12 +194,14 @@ export default function Productos() {
      ELIMINACIÓN
   ============================================================ */
   function solicitarEliminacion(producto) {
+    if (!puedeEditarProductos) return;
     setProductoAEliminar(producto);
     setModalOpen(true);
   }
 
   async function eliminarDefinitivo() {
     if (!productoAEliminar) return;
+    if (!puedeEditarProductos) return;
 
     await supabase.from("productos").delete().eq("id", productoAEliminar.id);
     setModalOpen(false);
@@ -178,12 +212,17 @@ export default function Productos() {
   /* ============================================================
      UI
   ============================================================ */
+  if (perfilLoading) {
+    return <div className="p-8 text-gray-600">Cargando…</div>;
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-semibold text-gray-900">Productos</h1>
 
+        {/* (no pediste bloquear crear, así que lo dejo igual) */}
         <Link
           to="/productos/nuevo"
           className="bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700 cursor-pointer"
@@ -238,7 +277,7 @@ export default function Productos() {
             }),
             menu: (base) => ({
               ...base,
-              zIndex: 50, // 👈 clave para no quedar bajo el thead
+              zIndex: 50,
             }),
           }}
         />
@@ -292,7 +331,6 @@ export default function Productos() {
                   <td className="px-6 py-3 text-sm">{p.categoria}</td>
                   <td className="px-6 py-3 text-sm">{p.formato}</td>
 
-                  {/* ✅ MODIFICADO SOLO AQUÍ: segunda línea si hay campaña vigente */}
                   <td className="px-6 py-3 text-sm font-semibold">
                     <div className="leading-tight">
                       <div>${precioNormal.toLocaleString("es-CL")}</div>
@@ -310,18 +348,41 @@ export default function Productos() {
 
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
-                      <Link
-                        to={`/productos/editar/${p.id}`}
-                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                      >
-                        Editar
-                      </Link>
-                      <button
-                        onClick={() => solicitarEliminacion(p)}
-                        className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
-                      >
-                        Eliminar
-                      </button>
+                      {puedeEditarProductos ? (
+                        <>
+                          <Link
+                            to={`/productos/editar/${p.id}`}
+                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          >
+                            Editar
+                          </Link>
+                          <button
+                            onClick={() => solicitarEliminacion(p)}
+                            className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="px-3 py-1 text-sm bg-gray-300 text-gray-600 rounded-md cursor-not-allowed"
+                            title="Tu rol no permite editar productos"
+                            disabled
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1 text-sm bg-gray-300 text-gray-600 rounded-md cursor-not-allowed"
+                            title="Tu rol no permite eliminar productos"
+                            disabled
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

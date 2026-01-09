@@ -61,6 +61,24 @@ function formatear(valor) {
   return Number(valor).toLocaleString("es-CL");
 }
 
+/* ============================================================
+   ✅ MONTO: separador miles en input (es-CL)
+============================================================ */
+function soloDigitos(str) {
+  return (str ?? "").toString().replace(/[^\d]/g, "");
+}
+
+function formatearCLDesdeString(str) {
+  const digits = soloDigitos(str);
+  if (!digits) return "";
+  return Number(digits).toLocaleString("es-CL");
+}
+
+function parseMontoCL(str) {
+  const digits = soloDigitos(str);
+  return Number(digits || 0);
+}
+
 /**
  * ✅ FIX: si el producto NO tiene SKU, igual debe devolver precio de lista.
  * - SKU solo se usa para campañas (si existe).
@@ -355,8 +373,7 @@ const REGIONES_CHILE = {
     "Villa Alegre",
     "Yerbas Buenas",
   ],
-  // ✅ OJO: esta key debe ir con comillas para evitar problemas y mantener consistencia
-  Ñuble: [
+  "Ñuble": [
     "Chillán",
     "Bulnes",
     "Chillán Viejo",
@@ -639,7 +656,7 @@ export default function CrearLicitacion() {
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
   const [nombre, setNombre] = useState("");
   const [fechaHoraCierre, setFechaHoraCierre] = useState("");
-  const [monto, setMonto] = useState("");
+  const [monto, setMonto] = useState(""); // ✅ ahora es string formateado (ej: "1.234.567")
   const [listado, setListado] = useState("1");
 
   const [rutEntidad, setRutEntidad] = useState("");
@@ -700,7 +717,15 @@ export default function CrearLicitacion() {
       setIdLicitacionInput(data.idLicitacionInput || "");
       setNombre(data.nombre || "");
       setFechaHoraCierre(data.fechaHoraCierre || "");
-      setMonto(data.monto || "");
+
+      // ✅ soporta borradores antiguos (monto numérico) y nuevos (string con puntos)
+      const montoGuardado = data.monto ?? "";
+      if (typeof montoGuardado === "number") {
+        setMonto(Number(montoGuardado).toLocaleString("es-CL"));
+      } else {
+        setMonto(formatearCLDesdeString(montoGuardado));
+      }
+
       setListado(data.listado || "1");
 
       setRutEntidad(data.rutEntidad || "");
@@ -743,7 +768,7 @@ export default function CrearLicitacion() {
       idLicitacionInput,
       nombre,
       fechaHoraCierre,
-      monto,
+      monto, // ✅ string formateado
       listado,
       rutEntidad,
       nombreEntidad,
@@ -1012,9 +1037,12 @@ export default function CrearLicitacion() {
   const totalNeto = Math.round(totalConIVA / 1.19);
   const totalIVA = totalConIVA - totalNeto;
 
+  // ✅ monto numérico desde string con puntos
+  const montoNum = parseMontoCL(monto);
+
   let porcentajePresupuesto = 0;
-  if (monto > 0) {
-    porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
+  if (montoNum > 0) {
+    porcentajePresupuesto = (totalConIVA / montoNum) * 100;
   }
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
@@ -1151,7 +1179,7 @@ export default function CrearLicitacion() {
           id_licitacion: idLicitacionInput,
           nombre,
           fecha_hora_cierre: fechaHoraCierre,
-          monto: Number(monto),
+          monto: parseMontoCL(monto), // ✅ guarda numérico real
           lista_precios: Number(listado),
 
           rut_entidad: rutEntidad,
@@ -1412,10 +1440,12 @@ export default function CrearLicitacion() {
               Monto Presupuesto *
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={monto}
-              onChange={(e) => setMonto(e.target.value)}
+              onChange={(e) => setMonto(formatearCLDesdeString(e.target.value))}
+              placeholder=""
             />
           </div>
 

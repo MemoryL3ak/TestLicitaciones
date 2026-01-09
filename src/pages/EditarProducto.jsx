@@ -1,7 +1,126 @@
+// EditarProducto.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
+import Select from "react-select";
+
+/* ============================================================
+   BUSCADOR MEJORADO (igual que licitaciones)
+============================================================ */
+function normalizarTexto(str) {
+  return (str ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function filtrarPorTerminos(option, inputValue) {
+  const q = normalizarTexto(inputValue);
+  if (!q) return true;
+
+  const label = normalizarTexto(option.label);
+  const terms = q.split(" ").filter(Boolean);
+  return terms.every((t) => label.includes(t));
+}
+
+/* ============================================================
+   CATEGORÍAS (LISTA)
+============================================================ */
+const CATEGORIAS = [
+  "Prevención e Higiene",
+  "Consumibles",
+  "Blanqueamiento",
+  "Operatoria",
+  "Endodoncia",
+  "Periodoncia",
+  "Cirugía",
+  "Ortodoncia",
+  "Equipos y Otros",
+  "Esterilización",
+  "Fresas y Pulido",
+  "Instrumental",
+  "Radiología",
+  "Impresión",
+  "Laboratorio",
+  "Insumos Médicos",
+  "Desinfección",
+];
+
+const opcionesCategoria = CATEGORIAS.map((c) => ({ value: c, label: c }));
+
+/* ============================================================
+   ESTILOS TAILWIND (IGUAL QUE CREAR PRODUCTO)
+============================================================ */
+const inputClass =
+  "w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2";
+const inputReadOnlyClass =
+  "w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2";
+
+/* ============================================================
+   ESTILOS react-select (igual look & tipografía que inputs)
+   ✅ fontSize y fontFamily en "inherit" para igualar CrearProducto
+============================================================ */
+const selectStyles = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: "42px",
+    height: "42px",
+    borderRadius: "6px",
+    borderColor: "#d1d5db",
+    backgroundColor: "#f9fafb", // bg-gray-50
+    boxShadow: state.isFocused ? "0 0 0 1px #d1d5db" : "none",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    ":hover": { borderColor: "#d1d5db" },
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    height: "42px",
+    padding: "0 12px",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+  }),
+  input: (base) => ({
+    ...base,
+    margin: 0,
+    padding: 0,
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    color: "#111827",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    color: "#111827",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    color: "#6b7280",
+  }),
+  indicatorSeparator: () => ({ display: "none" }),
+  dropdownIndicator: (base) => ({
+    ...base,
+    padding: "0 8px",
+    color: "#6b7280",
+  }),
+  option: (base, state) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    backgroundColor: state.isFocused ? "#1A73E8" : "white",
+    color: state.isFocused ? "white" : "#111827",
+    cursor: "pointer",
+  }),
+  menuPortal: (base) => ({ ...base, zIndex: 99999 }),
+};
 
 export default function EditarProducto() {
   const { id } = useParams();
@@ -133,20 +252,15 @@ export default function EditarProducto() {
     let skuFinal = skuOriginal;
 
     if (puedeEditarSKU) {
-      const skuLimpio = (producto.sku ?? "").toString().trim();
-
-      // Si admin lo deja vacío, puedes elegir:
-      // A) permitir borrar (sku = null)
-      // B) NO permitir borrar (mantener skuOriginal)
-      // Aquí dejo B para evitar que se pierda sin querer:
+      const skuLimpio = (producto.sku ?? "").toString().trim().toUpperCase();
+      // ✅ si admin lo deja vacío, mantiene el original (evita borrado accidental)
       skuFinal = skuLimpio || skuOriginal;
     }
 
     const estadoFinal = skuFinal ? "Activo" : "Transitorio";
 
-    // 3) ✅ FIX: no mandar sku: null para roles sin permiso
     const payload = {
-      sku: skuFinal, // mantiene el original si no hay permiso
+      sku: skuFinal,
       estado: estadoFinal,
       nombre: producto.nombre,
       marca: producto.marca,
@@ -154,9 +268,6 @@ export default function EditarProducto() {
       formato: producto.formato,
       lista1: Number(producto.lista1) || 0,
       lista2: Number(producto.lista2) || 0,
-      // Si no usas lista3/lista4, NO las sobrescribas en 0 (evita perder data)
-      // lista3: 0,
-      // lista4: 0,
     };
 
     const { error } = await supabase
@@ -170,7 +281,6 @@ export default function EditarProducto() {
       return;
     }
 
-    // refrescar originales
     setSkuOriginal(skuFinal);
     setProducto((prev) => ({
       ...prev,
@@ -238,7 +348,7 @@ export default function EditarProducto() {
               Estado
             </label>
             <input
-              className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
+              className={inputReadOnlyClass}
               value={(producto.sku ?? "").toString().trim() ? "Activo" : "Transitorio"}
               readOnly
             />
@@ -249,13 +359,13 @@ export default function EditarProducto() {
               SKU
             </label>
             <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              className={inputClass}
               value={producto.sku}
               disabled={!puedeEditarSKU}
               onChange={(e) =>
                 setProducto((prev) => ({
                   ...prev,
-                  sku: e.target.value,
+                  sku: e.target.value.toUpperCase(),
                 }))
               }
               placeholder="Ej: PH00001"
@@ -272,7 +382,7 @@ export default function EditarProducto() {
               Nombre del Producto
             </label>
             <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              className={inputClass}
               value={producto.nombre}
               onChange={(e) =>
                 setProducto((prev) => ({ ...prev, nombre: e.target.value }))
@@ -285,7 +395,7 @@ export default function EditarProducto() {
               Marca
             </label>
             <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              className={inputClass}
               value={producto.marca}
               onChange={(e) =>
                 setProducto((prev) => ({ ...prev, marca: e.target.value }))
@@ -293,15 +403,27 @@ export default function EditarProducto() {
             />
           </div>
 
+          {/* ✅ Categoría como lista (react-select) con misma tipografía que inputs */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Categoría
             </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={producto.categoria}
-              onChange={(e) =>
-                setProducto((prev) => ({ ...prev, categoria: e.target.value }))
+
+            <Select
+              options={opcionesCategoria}
+              styles={selectStyles}
+              placeholder="Seleccione categoría…"
+              menuPortalTarget={document.body}
+              isSearchable={true}
+              filterOption={filtrarPorTerminos}
+              value={
+                opcionesCategoria.find((o) => o.value === producto.categoria) || null
+              }
+              onChange={(op) =>
+                setProducto((prev) => ({
+                  ...prev,
+                  categoria: op ? op.value : "",
+                }))
               }
             />
           </div>
@@ -311,7 +433,7 @@ export default function EditarProducto() {
               Formato
             </label>
             <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+              className={inputClass}
               value={producto.formato}
               onChange={(e) =>
                 setProducto((prev) => ({ ...prev, formato: e.target.value }))
@@ -334,7 +456,7 @@ export default function EditarProducto() {
                   </label>
                   <input
                     type="number"
-                    className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                    className={inputClass}
                     value={producto[list]}
                     onChange={(e) =>
                       setProducto((prev) => ({
@@ -353,8 +475,7 @@ export default function EditarProducto() {
           <button
             type="button"
             onClick={guardarCambios}
-            className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow 
-             hover:bg-blue-700 transition-colors"
+            className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 transition-colors"
           >
             Guardar Cambios
           </button>

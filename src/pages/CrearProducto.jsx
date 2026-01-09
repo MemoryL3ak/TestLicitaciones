@@ -3,13 +3,134 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import { Link } from "react-router-dom";
+import Select from "react-select";
+
+/* ============================================================
+   BUSCADOR MEJORADO (igual que CrearLicitacion)
+============================================================ */
+function normalizarTexto(str) {
+  return (str ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function filtrarPorTerminos(option, inputValue) {
+  const q = normalizarTexto(inputValue);
+  if (!q) return true;
+
+  const label = normalizarTexto(option.label);
+  const terms = q.split(" ").filter(Boolean);
+  return terms.every((t) => label.includes(t));
+}
+
+/* ============================================================
+   CATEGORÍAS (LISTA)
+   ✅ se guardan tal cual (texto)
+============================================================ */
+const CATEGORIAS = [
+  "Prevención e Higiene",
+  "Consumibles",
+  "Blanqueamiento",
+  "Operatoria",
+  "Endodoncia",
+  "Periodoncia",
+  "Cirugía",
+  "Ortodoncia",
+  "Equipos y Otros",
+  "Esterilización",
+  "Fresas y Pulido",
+  "Instrumental",
+  "Radiología",
+  "Impresión",
+  "Laboratorio",
+  "Insumos Médicos",
+  "Desinfección",
+];
+
+const opcionesCategoria = CATEGORIAS.map((c) => ({ value: c, label: c }));
+
+/* ============================================================
+   ESTILOS react-select
+   ✅ Igual al input "Marca" (rounded-md, bg-gray-50, border, text-sm)
+============================================================ */
+const customStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "42px",
+    height: "42px",
+    borderRadius: "6px",        // rounded-md
+    borderColor: "#d1d5db",     // border-gray-300
+    backgroundColor: "#f9fafb", // bg-gray-50
+    boxShadow: "none",
+    fontFamily: "inherit",
+    fontSize: "14px",           // text-sm
+    paddingLeft: "2px",
+    ":hover": { borderColor: "#d1d5db" },
+  }),
+
+  valueContainer: (base) => ({
+    ...base,
+    height: "42px",
+    padding: "0 12px",          // px-3
+    fontFamily: "inherit",
+    fontSize: "14px",
+  }),
+
+  input: (base) => ({
+    ...base,
+    margin: 0,
+    padding: 0,
+    fontFamily: "inherit",
+    fontSize: "14px",
+    color: "#111827",
+  }),
+
+  singleValue: (base) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "14px",
+    color: "#111827",
+  }),
+
+  placeholder: (base) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "14px",
+    color: "#6b7280",
+  }),
+
+  indicatorSeparator: () => ({ display: "none" }),
+
+  dropdownIndicator: (base) => ({
+    ...base,
+    padding: "0 8px",
+    color: "#6b7280",
+  }),
+
+  option: (base, state) => ({
+    ...base,
+    fontFamily: "inherit",
+    fontSize: "14px",
+    backgroundColor: state.isFocused ? "#1A73E8" : "white",
+    color: state.isFocused ? "white" : "#111827",
+    cursor: "pointer",
+  }),
+
+  // ✅ para que el menú no quede detrás de otros elementos
+  menuPortal: (base) => ({ ...base, zIndex: 99999 }),
+};
 
 export default function CrearProducto() {
   const [sku, setSku] = useState("");
   const [estado, setEstado] = useState("Transitorio");
   const [nombre, setNombre] = useState("");
   const [marca, setMarca] = useState("");
-  const [categoria, setCategoria] = useState("");
+  const [categoria, setCategoria] = useState(""); // ✅ ahora viene del Select
   const [formato, setFormato] = useState("");
 
   const [precios, setPrecios] = useState({
@@ -64,9 +185,9 @@ export default function CrearProducto() {
     };
   }, []);
 
-  // ✅ En tu DB el rol es "admin" (según tu screenshot), no "Administrador"
+  // ✅ En tu DB el rol suele ser "admin" (y por compatibilidad también "Administrador")
   const puedeIngresarSKU = useMemo(() => {
-    return rol === "admin" || rol === "Administrador"; // por si tienes datos antiguos
+    return rol === "admin" || rol === "Administrador";
   }, [rol]);
 
   function actualizarPrecio(lista, valor) {
@@ -173,7 +294,7 @@ export default function CrearProducto() {
               value={sku}
               disabled={rolLoading || !puedeIngresarSKU}
               onChange={(e) => {
-                const val = e.target.value.toUpperCase(); // opcional: fuerza mayúsculas
+                const val = e.target.value.toUpperCase();
                 setSku(val);
                 setEstado(val.trim() ? "Activo" : "Transitorio");
               }}
@@ -218,15 +339,21 @@ export default function CrearProducto() {
             />
           </div>
 
-          {/* CATEGORÍA */}
+          {/* CATEGORÍA (✅ ahora es lista tipo react-select) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Categoría
             </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
+
+            <Select
+              options={opcionesCategoria}
+              styles={customStyles}
+              placeholder="Seleccione categoría…"
+              menuPortalTarget={document.body}
+              isSearchable={true}
+              filterOption={filtrarPorTerminos}
+              value={opcionesCategoria.find((o) => o.value === categoria) || null}
+              onChange={(op) => setCategoria(op ? op.value : "")}
             />
           </div>
 

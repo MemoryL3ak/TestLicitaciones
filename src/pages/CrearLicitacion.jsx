@@ -549,7 +549,8 @@ const opcionesComuna = (regionSeleccionada) =>
 const STORAGE_KEY = "crear_licitacion_draft";
 
 function generarId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID)
+    return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -611,7 +612,11 @@ export default function CrearLicitacion() {
   /* PERFIL / ROL */
   const [perfilLoading, setPerfilLoading] = useState(true);
   const [rol, setRol] = useState(null);
+
+  // ✅ vendedor (perfil)
   const [perfilNombre, setPerfilNombre] = useState("");
+  const [perfilEmail, setPerfilEmail] = useState(""); // ✅ nuevo
+  const [perfilCelular, setPerfilCelular] = useState(""); // ✅ nuevo
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -623,22 +628,30 @@ export default function CrearLicitacion() {
       if (userErr || !user) {
         setRol(null);
         setPerfilNombre("");
+        setPerfilEmail("");
+        setPerfilCelular("");
         setPerfilLoading(false);
         return;
       }
 
+      // ✅ email viene de auth
+      setPerfilEmail(user.email || "");
+
+      // ✅ ahora también leemos celular
       const { data: perfil, error: perfilErr } = await supabase
         .from("profiles")
-        .select("rol, nombre")
+        .select("rol, nombre, celular")
         .eq("id", user.id)
         .single();
 
       if (perfilErr || !perfil) {
         setRol(null);
         setPerfilNombre("");
+        setPerfilCelular("");
       } else {
         setRol(perfil.rol || null);
         setPerfilNombre(perfil.nombre || "");
+        setPerfilCelular(perfil.celular || "");
       }
 
       setPerfilLoading(false);
@@ -656,7 +669,7 @@ export default function CrearLicitacion() {
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
   const [nombre, setNombre] = useState("");
   const [fechaHoraCierre, setFechaHoraCierre] = useState("");
-  const [monto, setMonto] = useState(""); // ✅ ahora es string formateado (ej: "1.234.567")
+  const [monto, setMonto] = useState(""); // ✅ string formateado (ej: "1.234.567")
   const [listado, setListado] = useState("1");
 
   const [rutEntidad, setRutEntidad] = useState("");
@@ -679,6 +692,9 @@ export default function CrearLicitacion() {
   const [campaignPrices, setCampaignPrices] = useState({});
   const [items, setItems] = useState([crearItemVacio()]);
   const [hydrated, setHydrated] = useState(false);
+
+  // ✅ Observaciones generales (sección al final)
+  const [observaciones, setObservaciones] = useState("");
 
   async function buscarClientePorRut(rut) {
     if (!rut) return;
@@ -743,6 +759,8 @@ export default function CrearLicitacion() {
       setRegion(data.region || "");
       setComuna(data.comuna || "");
 
+      setObservaciones(data.observaciones || "");
+
       const cargados = Array.isArray(data.items) ? data.items : [];
       if (cargados.length > 0) {
         setItems(
@@ -784,6 +802,7 @@ export default function CrearLicitacion() {
       region,
       comuna,
       items,
+      observaciones,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -808,6 +827,7 @@ export default function CrearLicitacion() {
     region,
     comuna,
     items,
+    observaciones,
   ]);
 
   /* CARGA DE PRODUCTOS */
@@ -903,7 +923,9 @@ export default function CrearLicitacion() {
     const copia = items.map((it) => {
       const sku = String(it.sku || "").trim();
       const prod =
-        (sku ? productos.find((p) => String(p.sku || "").trim() === sku) : null) ||
+        (sku
+          ? productos.find((p) => String(p.sku || "").trim() === sku)
+          : null) ||
         (it.producto ? productos.find((p) => p.nombre === it.producto) : null);
 
       if (!prod) return it;
@@ -1012,7 +1034,9 @@ export default function CrearLicitacion() {
     const copia = items.map((it) => {
       const sku = String(it.sku || "").trim();
       const prod =
-        (sku ? productos.find((p) => String(p.sku || "").trim() === sku) : null) ||
+        (sku
+          ? productos.find((p) => String(p.sku || "").trim() === sku)
+          : null) ||
         (it.producto ? productos.find((p) => p.nombre === it.producto) : null);
 
       if (!prod) return it;
@@ -1112,6 +1136,8 @@ export default function CrearLicitacion() {
     setFleteEstimado(0);
     setItems([crearItemVacio()]);
 
+    setObservaciones("");
+
     setToast({
       type: "success",
       message: "Los datos fueron limpiados correctamente.",
@@ -1203,6 +1229,8 @@ export default function CrearLicitacion() {
           total_sin_iva: totalNeto,
           total_iva: totalIVA,
 
+          observaciones: observaciones || null,
+
           created_by: user.id,
         },
       ])
@@ -1235,11 +1263,21 @@ export default function CrearLicitacion() {
       ]);
     }
 
-    // ✅ PDF con N° ítem
+    // ✅ PDF:
+    // - numero_licitacion: dejamos el ID interno (lic.id) para el N° de cotización (como antes)
+    // - id_licitacion: ✅ AHORA ES idLicitacionInput (lo que pones en el formulario)
+    // - vendedor_*: ✅ viene de profiles + auth
     await generarPDFcotizacion({
-      numero_licitacion: idLicitacion,
+      numero_licitacion: idLicitacion, // N° Cotización (como lo tenías)
+      id_licitacion: idLicitacionInput, // ✅ ID Licitación en el template
       fecha_emision: fechaHoy,
 
+      // ✅ Datos vendedor (template: {{vendedor_nombre}}, {{vendedor_correo}}, {{vendedor_celular}})
+      vendedor_nombre: (perfilNombre ?? "").toString(),
+      vendedor_correo: (user.email ?? perfilEmail ?? "").toString(),
+      vendedor_celular: (perfilCelular ?? "").toString(),
+
+      // Cliente
       nombre_entidad: nombreEntidad,
       rut_entidad: rutEntidad,
       direccion,
@@ -1248,6 +1286,9 @@ export default function CrearLicitacion() {
       email,
       telefono,
       condicion_venta: condVenta,
+
+      // Observaciones generales (template: {{observaciones}})
+      observaciones: (observaciones ?? "").toString(),
 
       items_tabla: items
         .map((it, idx) => {
@@ -1952,6 +1993,24 @@ export default function CrearLicitacion() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ============================================================
+          OBSERVACIONES (NUEVA SECCIÓN AL FINAL)
+      ============================================================ */}
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Observaciones</h2>
+
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Observaciones generales
+        </label>
+
+        <textarea
+          className="w-full min-h-[110px] rounded-md border border-gray-300 px-3 py-2 text-sm"
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          placeholder="Escribe observaciones generales para la licitación…"
+        />
       </div>
 
       {/* ============================================================

@@ -1,247 +1,343 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
+  <meta charset="UTF-8" />
 
-<style>
-@page { size: letter; margin: 25mm; }
+  <style>
+    @page { size: letter; margin: 25mm; }
 
-body {
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    color: #1f1f1f;
-    background: #fff;
-}
+    :root{
+      /* Ajuste para subir el cuadro de observaciones SIN pisar los totales */
+      --obs-shift: 68px;
 
-/* Marca de Agua */
-.marca-agua {
-    position: absolute;
-    top: 82%;
-    left: 50%;
-    width: 550px;
-    opacity: 0.22;
-    transform: translate(-50%, -50%);
-    z-index: -1;
-    filter: contrast(180%) brightness(130%);
-    pointer-events: none;
-}
+      /* ✅ PARA agrandar hacia la izquierda manteniendo el borde derecho */
+      --right-col-width: 260px; /* igual que .right-col */
+      --obs-width: 460px;       /* el ancho total deseado del cuadro */
+    }
 
-/* Header */
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 3px solid #4b89ac;
-    padding-bottom: 10px;
-}
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #1f1f1f;
+      background: #fff;
+    }
 
-.logo { width: 230px; }
+    /* Marca de Agua */
+    .marca-agua {
+      position: absolute;
+      top: 82%;
+      left: 50%;
+      width: 550px;
+      opacity: 0.22;
+      transform: translate(-50%, -50%);
+      z-index: -1;
+      filter: contrast(180%) brightness(130%);
+      pointer-events: none;
+    }
 
-.empresa-info { font-size: 12px; }
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #4b89ac;
+      padding-bottom: 10px;
+    }
 
-.empresa-nombre {
-    font-size: 17px;
-    font-weight: bold;
-    color: #1d4f67;
-}
+    .logo { width: 230px; }
 
-/* Caja Cotización */
-.cot-box {
-    border: 2px solid #4b89ac;
-    padding: 12px;
-    width: 230px;
-    text-align: center;
-    font-weight: bold;
-    color: #1d4f67;
-}
+    .empresa-info { font-size: 12px; }
 
-.section-title {
-    font-weight: bold;
-    color: #1d4f67;
-    font-size: 13px;
-    margin-top: 18px;
-    margin-bottom: 6px;
-}
+    .empresa-nombre {
+      font-size: 17px;
+      font-weight: bold;
+      color: #1d4f67;
+    }
 
-/* Tablas */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 11px;
-}
+    /* Caja Cotización */
+    .cot-box {
+      border: 2px solid #4b89ac;
+      padding: 12px;
+      width: 230px;
+      text-align: center;
+      font-weight: bold;
+      color: #1d4f67;
+    }
 
-th {
-    background: #eef3f6;
-    padding: 6px;
-    border: 1px solid #bfcbd2;
-    color: #1d4f67;
-    font-weight: bold;
-}
+    .section-title {
+      font-weight: bold;
+      color: #1d4f67;
+      font-size: 13px;
+      margin-top: 18px;
+      margin-bottom: 6px;
+    }
 
-td {
-    padding: 5px;
-    border: 1px solid #cdd5db;
-}
+    /* Tablas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
 
-/* Tabla Cliente */
-.cliente-table td {
-    border: none;
-    padding: 4px 0;
-}
+    th {
+      background: #eef3f6;
+      padding: 6px;
+      border: 1px solid #bfcbd2;
+      color: #1d4f67;
+      font-weight: bold;
+    }
 
-.label {
-    font-weight: bold;
-    color: #1d4f67;
-    width: 95px;
-}
+    td {
+      padding: 5px;
+      border: 1px solid #cdd5db;
+    }
 
-/* Totales */
-.totales {
-    width: 260px;
-    float: right;
-    margin-top: 20px;
-    border: 1px solid #bfcbd2;
-}
+    /* Tabla tipo "ficha" (cliente / vendedor / meta) */
+    .info-table td {
+      border: none;
+      padding: 4px 0;
+      vertical-align: top;
+    }
 
-.totales td {
-    border: none;
-    padding: 6px 8px;
-    font-size: 12px;
-}
+    /* 👇 CLAVE: mismos anchos para alinear TODA la columna derecha */
+    .label {
+      font-weight: bold;
+      color: #1d4f67;
+      width: 95px;
+      white-space: nowrap;
+      padding-right: 10px;
+    }
 
-.tot-label {
-    color: #1d4f67;
-    font-weight: bold;
-}
+    .value {
+      width: 240px;
+      padding-right: 30px;
+    }
 
-/* Datos Bancarios */
-.bank-table {
-    margin-top: 40px;
-    width: 45%;
-    font-size: 11px;
-}
+    .value-right {
+      width: 260px;
+    }
 
-.bank-table td {
-    border: 1px solid #bfcbd2;
-    padding: 6px;
-}
+    /* Totales */
+    .right-col {
+      width: var(--right-col-width);
+      margin-left: auto;
+    }
 
-.bank-header {
-    text-align: center;
-    font-weight: bold;
-    background: #eef3f6;
-    color: #1d4f67;
-}
-</style>
+    .totales {
+      width: 260px;
+      border: 1px solid #bfcbd2;
+    }
+
+    .totales td {
+      border: none;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .tot-label {
+      color: #1d4f67;
+      font-weight: bold;
+    }
+
+    /* Datos Bancarios */
+    .bank-table {
+      width: 45%;
+      font-size: 11px;
+    }
+
+    .bank-table td {
+      border: 1px solid #bfcbd2;
+      padding: 6px;
+    }
+
+    .bank-header {
+      text-align: center;
+      font-weight: bold;
+      background: #eef3f6;
+      color: #1d4f67;
+    }
+
+    /* Layout inferior: banco (izq) + totales/observaciones (der) */
+    .bottom-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    /* ✅ Observaciones (más ancho hacia la izquierda, borde derecho fijo) */
+    .obs-box {
+      border: 1px solid #bfcbd2;
+      padding: 10px 12px;
+
+      /* ✅ ancho real del cuadro */
+      width: var(--obs-width);
+      box-sizing: border-box;
+
+      /*
+        ✅ Esto es lo importante:
+        - Si el cuadro mide 560px y la columna derecha 260px,
+          lo movemos 300px a la izquierda para que el borde derecho
+          quede exactamente alineado con la columna.
+      */
+      margin-left: calc(var(--right-col-width) - var(--obs-width));
+      margin-right: 0;
+
+      /* Subir SIN montar sobre totales */
+      margin-top: calc(12px + var(--obs-shift));
+      position: relative;
+      top: calc(-1 * var(--obs-shift));
+    }
+
+    .obs-title {
+      font-weight: bold;
+      color: #1d4f67;
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
+    }
+
+    .obs-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+      min-height: 62px;
+    }
+  </style>
 </head>
 
 <body>
 
-<!-- MARCA DE AGUA -->
-<img class="marca-agua" 
-     src="https://i.ibb.co/d1QyPvm/logo-marca-agua.png"
-     crossOrigin="anonymous"
-/>
+  <!-- MARCA DE AGUA -->
+  <img
+    class="marca-agua"
+    src="https://i.ibb.co/d1QyPvm/logo-marca-agua.png"
+    crossOrigin="anonymous"
+  />
 
-<!-- HEADER -->
-<div class="header">
+  <!-- HEADER -->
+  <div class="header">
     <div style="display:flex; gap: 12px;">
-        <img class="logo" src="https://i.ibb.co/RGb0W84B/Amsodent.png" crossOrigin="anonymous" />
+      <img class="logo" src="https://i.ibb.co/RGb0W84B/Amsodent.png" crossOrigin="anonymous" />
 
-        <div class="empresa-info">
-            <div class="empresa-nombre">Amsodent Medical Spa</div>
-            R.U.T.: 78.087.954-8<br>
-            Giro: Venta de Insumos Médicos y Dentales<br>
-            Matriz: 1° Mayo 45, San Bernardo<br>
-            Tel: +56940943030<br>
-            Email: ventas@amsodentmedical.cl
-        </div>
+      <div class="empresa-info">
+        <div class="empresa-nombre">Amsodent Medical Spa</div>
+        R.U.T.: 78.087.954-8<br>
+        Giro: Venta de Insumos Médicos y Dentales<br>
+        Matriz: 1° Mayo 45, San Bernardo<br>
+        Tel: +56940943030<br>
+        Email: ventas@amsodentmedical.cl
+      </div>
     </div>
 
     <div class="cot-box">
-        <div class="cot-titulo">COTIZACIÓN</div>
-        Nº {{numero_licitacion}}
+      <div class="cot-titulo">COTIZACIÓN</div>
+      Nº {{numero_licitacion}}
     </div>
-</div>
+  </div>
 
-<!-- FECHA -->
-<div class="section-title">Fecha de Emisión</div>
-{{fecha_emision}}
+  <!-- FECHA + ID LICITACIÓN -->
+  <div class="section-title">Fecha de Emisión</div>
 
-<!-- DATOS DEL CLIENTE -->
-<div class="section-title">Datos del Cliente</div>
-
-<table class="cliente-table">
+  <table class="info-table">
     <tr>
-        <td class="label">Señor(es):</td><td>{{nombre_entidad}}</td>
-        <td class="label">Contacto:</td><td>{{contacto}}</td>
+      <td class="label">Fecha:</td>
+      <td class="value">{{fecha_emision}}</td>
+      <td class="label">ID Licitación:</td>
+      <td class="value-right">{{id_licitacion}}</td>
     </tr>
+  </table>
 
+  <!-- DATOS DEL CLIENTE -->
+  <div class="section-title">Datos del Cliente</div>
+
+  <table class="info-table">
     <tr>
-        <td class="label">RUT:</td><td>{{rut_entidad}}</td>
-        <td class="label">Email:</td><td>{{email}}</td>
+      <td class="label">Señor(es):</td><td class="value">{{nombre_entidad}}</td>
+      <td class="label">Contacto:</td><td class="value-right">{{contacto}}</td>
     </tr>
-
     <tr>
-        <td class="label">Dirección:</td><td>{{direccion}}</td>
-        <td class="label">Teléfono:</td><td>{{telefono}}</td>
+      <td class="label">RUT:</td><td class="value">{{rut_entidad}}</td>
+      <td class="label">Email:</td><td class="value-right">{{email}}</td>
     </tr>
-
     <tr>
-        <td class="label">Comuna:</td><td>{{comuna}}</td>
-        <td class="label">Cond. Venta:</td><td>{{condicion_venta}}</td>
+      <td class="label">Dirección:</td><td class="value">{{direccion}}</td>
+      <td class="label">Teléfono:</td><td class="value-right">{{telefono}}</td>
     </tr>
-</table>
+    <tr>
+      <td class="label">Comuna:</td><td class="value">{{comuna}}</td>
+      <td class="label">Cond. Venta:</td><td class="value-right">{{condicion_venta}}</td>
+    </tr>
+  </table>
 
-<!-- ITEMS -->
-<div class="section-title">Detalle de Productos</div>
+  <!-- DATOS DEL VENDEDOR -->
+  <div class="section-title">Datos de Vendedor</div>
 
-<table>
+  <table class="info-table">
+    <tr>
+      <td class="label">Nombre:</td><td class="value">{{vendedor_nombre}}</td>
+      <td class="label">Correo:</td><td class="value-right">{{vendedor_correo}}</td>
+    </tr>
+    <tr>
+      <td class="label">Celular:</td><td class="value">{{vendedor_celular}}</td>
+      <td class="label"></td><td class="value-right"></td>
+    </tr>
+  </table>
+
+  <!-- ITEMS -->
+  <div class="section-title">Detalle de Productos</div>
+
+  <table>
     <thead>
-        <tr>
-            <th>Ítem</th>
-            <th>SKU</th>
-            <th>Descripción</th>
-            <th>Formato</th>
-            <th>Cant.</th>
-            <th>Precio</th>
-            <th>Total</th>
-        </tr>
+      <tr>
+        <th>Ítem</th>
+        <th>SKU</th>
+        <th>Descripción</th>
+        <th>Formato</th>
+        <th>Cant.</th>
+        <th>Precio</th>
+        <th>Total</th>
+      </tr>
     </thead>
-
     <tbody>
-        {{items_tabla}}
+      {{items_tabla}}
     </tbody>
-</table>
+  </table>
 
-<!-- TOTALES CORREGIDOS -->
-<table class="totales">
-    <tr>
-        <td class="tot-label">Neto:</td>
-        <td>$ [[[NETO]]]</td>
-    </tr>
+  <!-- BLOQUE INFERIOR -->
+  <div class="bottom-row">
+    <table class="bank-table">
+      <tr><td colspan="2" class="bank-header">DATOS PARA TRANSFERENCIA BANCARIA</td></tr>
+      <tr><td>Banco:</td><td>Banco Santander Chile</td></tr>
+      <tr><td>Cuenta Corriente:</td><td>96608446</td></tr>
+      <tr><td>R.U.T.:</td><td>78.087.954-8</td></tr>
+      <tr><td>Empresa:</td><td>Amsodent Medical Spa</td></tr>
+      <tr><td>Aviso Email:</td><td>contacto@amsodentmedical.cl</td></tr>
+    </table>
 
-    <tr>
-        <td class="tot-label">IVA 19%:</td>
-        <td>$ [[[IVA]]]</td>
-    </tr>
+    <div class="right-col">
+      <table class="totales">
+        <tr>
+          <td class="tot-label">Neto:</td>
+          <td style="text-align:right;">$ [[[NETO]]]</td>
+        </tr>
+        <tr>
+          <td class="tot-label">IVA 19%:</td>
+          <td style="text-align:right;">$ [[[IVA]]]</td>
+        </tr>
+        <tr>
+          <td class="tot-label" style="font-size:14px;">TOTAL:</td>
+          <td style="text-align:right; font-size:14px; font-weight:bold;">$ [[[TOTAL]]]</td>
+        </tr>
+      </table>
 
-    <tr>
-        <td class="tot-label" style="font-size:14px;">TOTAL:</td>
-        <td style="font-size:14px; font-weight:bold;">$ [[[TOTAL]]]</td>
-    </tr>
-</table>
-
-<!-- DATOS BANCARIOS -->
-<table class="bank-table">
-    <tr><td colspan="2" class="bank-header">DATOS PARA TRANSFERENCIA BANCARIA</td></tr>
-
-    <tr><td>Banco:</td><td>Banco Santander Chile</td></tr>
-    <tr><td>Cuenta Corriente:</td><td>96608446</td></tr>
-    <tr><td>R.U.T.:</td><td>78.087.954-8</td></tr>
-    <tr><td>Empresa:</td><td>Amsodent Medical Spa</td></tr>
-    <tr><td>Aviso Email:</td><td>contacto@amsodentmedical.cl</td></tr>
-</table>
+      <div class="obs-box">
+        <div class="obs-title">OBSERVACIONES</div>
+        <div class="obs-text">{{observaciones}}</div>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

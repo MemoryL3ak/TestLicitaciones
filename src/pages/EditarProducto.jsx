@@ -225,71 +225,94 @@ export default function EditarProducto() {
   /* ============================================================
      Guardar cambios
   ============================================================ */
-  async function guardarCambios() {
-    setToast(null);
 
-    // 1) ✅ ventas NO edita
-    if (!puedeEditarProducto) {
-      setToast({
-        type: "error",
-        message: "Tu rol no permite editar productos.",
-      });
-      return;
-    }
 
-    // validación básica
-    if (!producto.nombre || !producto.categoria || !producto.formato) {
-      setToast({
-        type: "error",
-        message: "Debes completar Nombre, Categoría y Formato.",
-      });
-      return;
-    }
 
-    // SKU según permisos:
-    // - admin: puede cambiar
-    // - no admin: se mantiene el SKU original (NO se borra)
-    let skuFinal = skuOriginal;
 
-    if (puedeEditarSKU) {
-      const skuLimpio = (producto.sku ?? "").toString().trim().toUpperCase();
-      // ✅ si admin lo deja vacío, mantiene el original (evita borrado accidental)
-      skuFinal = skuLimpio || skuOriginal;
-    }
 
-    const estadoFinal = skuFinal ? "Activo" : "Transitorio";
+async function guardarCambios() {
+  setToast(null);
 
-    const payload = {
-      sku: skuFinal,
-      estado: estadoFinal,
-      nombre: producto.nombre,
-      marca: producto.marca,
-      categoria: producto.categoria,
-      formato: producto.formato,
-      lista1: Number(producto.lista1) || 0,
-      lista2: Number(producto.lista2) || 0,
-    };
-
-    const { error } = await supabase
-      .from("productos")
-      .update(payload)
-      .eq("id", id);
-
-    if (error) {
-      console.error(error);
-      setToast({ type: "error", message: "Error al guardar cambios" });
-      return;
-    }
-
-    setSkuOriginal(skuFinal);
-    setProducto((prev) => ({
-      ...prev,
-      sku: skuFinal,
-      estado: estadoFinal,
-    }));
-
-    setToast({ type: "success", message: "Producto actualizado" });
+  if (!puedeEditarProducto) {
+    setToast({
+      type: "error",
+      message: "Tu rol no permite editar productos.",
+    });
+    return;
   }
+
+  if (!producto.nombre || !producto.categoria || !producto.formato) {
+    setToast({
+      type: "error",
+      message: "Debes completar Nombre, Categoría y Formato.",
+    });
+    return;
+  }
+
+  // SKU según permisos
+  let skuFinal = skuOriginal;
+
+  if (puedeEditarSKU) {
+    const skuLimpio = (producto.sku ?? "").toString().trim().toUpperCase();
+    skuFinal = skuLimpio || skuOriginal;
+  }
+
+  // ✅ CLAVE: si queda vacío => NULL (no "")
+  skuFinal = (skuFinal ?? "").toString().trim();
+  skuFinal = skuFinal.length ? skuFinal : null;
+
+  const estadoFinal = skuFinal ? "Activo" : "Transitorio";
+
+  const payload = {
+    sku: skuFinal,
+    estado: estadoFinal,
+    nombre: producto.nombre,
+    marca: producto.marca,
+    categoria: producto.categoria,
+    formato: producto.formato,
+    lista1: Number(producto.lista1) || 0,
+    lista2: Number(producto.lista2) || 0,
+  };
+
+  const { error } = await supabase
+    .from("productos")
+    .update(payload)
+    .eq("id", id);
+
+  if (error) {
+    console.error(error);
+    setToast({ type: "error", message: "Error al guardar cambios" });
+    return;
+  }
+
+  setSkuOriginal(skuFinal ?? "");
+  setProducto((prev) => ({
+    ...prev,
+    sku: skuFinal ?? "",
+    estado: estadoFinal,
+  }));
+
+  setToast({ type: "success", message: "Producto actualizado" });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   if (loading) return <div className="p-6">Cargando...</div>;
 

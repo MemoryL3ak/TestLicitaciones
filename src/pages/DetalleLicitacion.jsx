@@ -64,8 +64,27 @@ function formatear(valor) {
 }
 
 function generarUid() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID)
+    return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/* ============================================================
+   ✅ CL $ helpers (para Precio Unitario editable)
+============================================================ */
+function soloDigitos(str) {
+  return (str ?? "").toString().replace(/[^\d]/g, "");
+}
+
+function formatearCLDesdeString(str) {
+  const digits = soloDigitos(str);
+  if (!digits) return "";
+  return Number(digits).toLocaleString("es-CL");
+}
+
+function parseMontoCL(str) {
+  const digits = soloDigitos(str);
+  return Number(digits || 0);
 }
 
 /* ============================================================
@@ -130,7 +149,6 @@ const customStyles = {
     fontSize: "13px",
     fontFamily: "inherit",
   }),
-  // ✅ para que el menú no quede detrás de otros elementos
   menuPortal: (base) => ({ ...base, zIndex: 99999 }),
 };
 
@@ -370,7 +388,7 @@ const REGIONES_CHILE = {
     "San Ignacio",
     "Yungay",
     "Coelemu",
-    "Cobquecura", // ✅ agregado
+    "Cobquecura",
     "Ninhue",
     "Portezuelo",
     "Quirihue",
@@ -520,7 +538,6 @@ const REGIONES_CHILE = {
   ],
 };
 
-// ✅ Opciones React-Select para Región/Comuna (buscables)
 const opcionesRegion = Object.keys(REGIONES_CHILE).map((reg) => ({
   value: reg,
   label: reg,
@@ -618,6 +635,14 @@ export default function EditarLicitacion() {
   const [estado, setEstado] = useState("En espera");
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
 
+  // ✅ Observaciones generales
+  const [observaciones, setObservaciones] = useState("");
+
+  // ✅ Vendedor (para PDF)
+  const [vendedorNombre, setVendedorNombre] = useState("");
+  const [vendedorCelular, setVendedorCelular] = useState("");
+  const [vendedorCorreo, setVendedorCorreo] = useState("");
+
   /* ===============================
      DATOS ENTIDAD
   ================================ */
@@ -651,10 +676,14 @@ export default function EditarLicitacion() {
       categoria: "",
       formato: "",
       cantidad: 0,
-      precio: 0,
+      precio: 0, // base sin flete
       total: 0,
       observacion: "",
       mostrarObs: false,
+
+      // ✅ Precio Unitario editable (incluye flete)
+      precioManual: false,
+      precioUnitarioStr: "",
     },
   ]);
 
@@ -726,6 +755,62 @@ export default function EditarLicitacion() {
   }
 
   /* ============================================================
+     ✅ Cargar vendedor desde sesión (fallback si la licitación no trae datos)
+  ============================================================ */
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+
+        if (!user) return;
+
+        const meta = user.user_metadata || {};
+        const emailAuth = user.email || "";
+
+        // Solo completar si están vacíos (para no pisar lo que venga de BD o borrador)
+        setVendedorCorreo((prev) => prev || emailAuth || "");
+        setVendedorNombre(
+          (prev) =>
+            prev ||
+            meta?.nombre ||
+            meta?.name ||
+            meta?.full_name ||
+            meta?.display_name ||
+            ""
+        );
+        setVendedorCelular(
+          (prev) => prev || meta?.celular || meta?.phone || meta?.telefono || ""
+        );
+      } catch (e) {
+        // no bloquear
+      }
+    })();
+  }, []);
+
+  /* ============================================================
+     Crear Item Vacío
+  ============================================================ */
+  function crearItemVacio() {
+    return {
+      uid: generarUid(),
+      id_item: null,
+      sku: "",
+      producto: "",
+      categoria: "",
+      formato: "",
+      cantidad: 0,
+      precio: 0,
+      total: 0,
+      observacion: "",
+      mostrarObs: false,
+
+      precioManual: false,
+      precioUnitarioStr: "",
+    };
+  }
+
+  /* ============================================================
      BORRADOR
   ============================================================ */
   useEffect(() => {
@@ -757,6 +842,13 @@ export default function EditarLicitacion() {
 
       setFleteEstimado(data.fleteEstimado || 0);
 
+      setObservaciones(data.observaciones || "");
+
+      // ✅ vendedor (borrador)
+      setVendedorNombre(data.vendedorNombre || "");
+      setVendedorCelular(data.vendedorCelular || "");
+      setVendedorCorreo(data.vendedorCorreo || "");
+
       const cargados = Array.isArray(data.items) ? data.items : [];
       setItems(
         cargados.length
@@ -772,28 +864,18 @@ export default function EditarLicitacion() {
               total: Number(it.total || 0),
               observacion: it.observacion || "",
               mostrarObs: Boolean(it.mostrarObs),
+
+              precioManual: Boolean(it.precioManual),
+              precioUnitarioStr: it.precioUnitarioStr || "",
             }))
-          : [
-              {
-                uid: generarUid(),
-                id_item: null,
-                sku: "",
-                producto: "",
-                categoria: "",
-                formato: "",
-                cantidad: 0,
-                precio: 0,
-                total: 0,
-                observacion: "",
-                mostrarObs: false,
-              },
-            ]
+          : [crearItemVacio()]
       );
     } catch (e) {
       console.error("Error cargando borrador edición", e);
     } finally {
       setHydrated(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [STORAGE_KEY]);
 
   useEffect(() => {
@@ -820,6 +902,12 @@ export default function EditarLicitacion() {
       condVenta,
       fleteEstimado,
       items,
+      observaciones,
+
+      // ✅ vendedor
+      vendedorNombre,
+      vendedorCelular,
+      vendedorCorreo,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -846,6 +934,10 @@ export default function EditarLicitacion() {
     condVenta,
     fleteEstimado,
     items,
+    observaciones,
+    vendedorNombre,
+    vendedorCelular,
+    vendedorCorreo,
   ]);
 
   /* ============================================================
@@ -875,6 +967,12 @@ export default function EditarLicitacion() {
 
       fleteEstimado: Number(fleteEstimado || 0),
 
+      observaciones: observaciones || "",
+
+      vendedorNombre: vendedorNombre || "",
+      vendedorCelular: vendedorCelular || "",
+      vendedorCorreo: vendedorCorreo || "",
+
       items: (items || []).map((it) => ({
         uid: it.uid,
         sku: it.sku || "",
@@ -885,6 +983,9 @@ export default function EditarLicitacion() {
         precio: Number(it.precio || 0),
         observacion: it.observacion || "",
         mostrarObs: Boolean(it.mostrarObs),
+
+        precioManual: Boolean(it.precioManual),
+        precioUnitarioStr: it.precioUnitarioStr || "",
       })),
     });
   }
@@ -934,6 +1035,10 @@ export default function EditarLicitacion() {
     condVenta,
     fleteEstimado,
     items,
+    observaciones,
+    vendedorNombre,
+    vendedorCelular,
+    vendedorCorreo,
   ]);
 
   async function descartarCambios() {
@@ -978,6 +1083,13 @@ export default function EditarLicitacion() {
     setCondVenta(lic.condicion_venta || "");
     setFleteEstimado(lic.flete_estimado || 0);
 
+    setObservaciones(lic.observaciones || "");
+
+    // ✅ vendedor desde BD (si existe)
+    setVendedorNombre(lic.vendedor_nombre || "");
+    setVendedorCelular(lic.vendedor_celular || "");
+    setVendedorCorreo(lic.vendedor_correo || "");
+
     const cantidadProductosDB = (itemsDB || []).reduce(
       (acc, it) => acc + Number(it.cantidad || 0),
       0
@@ -1006,28 +1118,13 @@ export default function EditarLicitacion() {
           total: redondear(cantidad * (precioBase + fletePorUnidadDB)),
           observacion: i.observacion || "",
           mostrarObs: Boolean(i.observacion),
+
+          precioManual: false,
+          precioUnitarioStr: "",
         };
       }) || [];
 
-    setItems(
-      itemsNormalizados.length > 0
-        ? itemsNormalizados
-        : [
-            {
-              uid: generarUid(),
-              id_item: null,
-              sku: "",
-              producto: "",
-              categoria: "",
-              formato: "",
-              cantidad: 0,
-              precio: 0,
-              total: 0,
-              observacion: "",
-              mostrarObs: false,
-            },
-          ]
-    );
+    setItems(itemsNormalizados.length > 0 ? itemsNormalizados : [crearItemVacio()]);
 
     setHydrated(true);
     setLoading(false);
@@ -1179,6 +1276,13 @@ export default function EditarLicitacion() {
       setCondVenta(lic.condicion_venta || "");
       setFleteEstimado(lic.flete_estimado || 0);
 
+      setObservaciones(lic.observaciones || "");
+
+      // ✅ vendedor desde BD (si existe)
+      setVendedorNombre(lic.vendedor_nombre || "");
+      setVendedorCelular(lic.vendedor_celular || "");
+      setVendedorCorreo(lic.vendedor_correo || "");
+
       const cantidadProductosDB = (itemsDB || []).reduce(
         (acc, it) => acc + Number(it.cantidad || 0),
         0
@@ -1207,34 +1311,20 @@ export default function EditarLicitacion() {
             total: redondear(cantidad * (precioBase + fletePorUnidadDB)),
             observacion: i.observacion || "",
             mostrarObs: Boolean(i.observacion),
+
+            precioManual: false,
+            precioUnitarioStr: "",
           };
         }) || [];
 
-      setItems(
-        itemsNormalizados.length > 0
-          ? itemsNormalizados
-          : [
-              {
-                uid: generarUid(),
-                id_item: null,
-                sku: "",
-                producto: "",
-                categoria: "",
-                formato: "",
-                cantidad: 0,
-                precio: 0,
-                total: 0,
-                observacion: "",
-                mostrarObs: false,
-              },
-            ]
-      );
+      setItems(itemsNormalizados.length > 0 ? itemsNormalizados : [crearItemVacio()]);
 
       setHydrated(true);
       setLoading(false);
     }
 
     cargarTodoDB();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, hydrated, STORAGE_KEY]);
 
   /* ============================================================
@@ -1265,17 +1355,55 @@ export default function EditarLicitacion() {
       ? redondear(Number(fleteEstimado) / cantidadProductos)
       : 0;
 
+  /* ============================================================
+     ✅ Precio Unitario editable (incluye flete)
+  ============================================================ */
+  function actualizarPrecioUnitario(index, valorStr) {
+    const copia = [...items];
+    const item = { ...copia[index] };
+
+    item.precioUnitarioStr = formatearCLDesdeString(valorStr);
+    const unitConFlete = parseMontoCL(item.precioUnitarioStr);
+
+    const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
+    item.precio = baseSinFlete;
+    item.precioManual = true;
+
+    const cantidad = Math.max(1, Number(item.cantidad || 1));
+    item.total = redondear(
+      cantidad * (baseSinFlete + Number(fletePorUnidad || 0))
+    );
+
+    copia[index] = item;
+    setItems(copia);
+  }
+
+  /* ============================================================
+     Recalcular totales con flete
+     - si el precio es manual y tiene precioUnitarioStr, mantener unitario constante
+  ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
 
     const copia = items.map((it) => {
       const cantidad = Math.max(1, Number(it.cantidad || 1));
-      const precioBase = Number(it.precio || 0);
-      const precioConFlete = precioBase + fletePorUnidad;
 
+      if (it.precioManual && (it.precioUnitarioStr ?? "") !== "") {
+        const unitConFlete = parseMontoCL(it.precioUnitarioStr);
+        const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
+        return {
+          ...it,
+          precio: baseSinFlete,
+          total: redondear(
+            cantidad * (baseSinFlete + Number(fletePorUnidad || 0))
+          ),
+        };
+      }
+
+      const precioBase = Number(it.precio || 0);
       return {
         ...it,
-        total: redondear(cantidad * precioConFlete),
+        total: redondear(cantidad * (precioBase + fletePorUnidad)),
       };
     });
 
@@ -1289,7 +1417,7 @@ export default function EditarLicitacion() {
   const totalIVA = totalConIVA - totalNeto;
 
   let porcentajePresupuesto = 0;
-  if (monto > 0) {
+  if (Number(monto) > 0) {
     porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
   }
 
@@ -1301,14 +1429,22 @@ export default function EditarLicitacion() {
   else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
   /* ============================================================
-     CAMBIO DE LISTA (✅ soporta SKU vacío buscando por producto)
+     CAMBIO DE LISTA
+     ✅ NO pisa precios manuales
   ============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((it) => {
+      if (it.precioManual) {
+        const cantidad = Math.max(1, Number(it.cantidad || 1));
+        return {
+          ...it,
+          total: redondear(cantidad * (Number(it.precio || 0) + fletePorUnidad)),
+        };
+      }
+
       const sku = String(it.sku || "").trim();
       const productoNombre = String(it.producto || "").trim();
 
-      // buscar producto por SKU si existe, si no por nombre
       const prod = sku
         ? productos.find((p) => String(p.sku || "").trim() === sku)
         : productoNombre
@@ -1320,7 +1456,6 @@ export default function EditarLicitacion() {
       const listaValida = nuevaLista === "2" ? "lista2" : "lista1";
       const skuProd = String(prod.sku || "").trim();
 
-      // campaña solo si hay SKU válido
       const precioCampania = skuProd ? campaignPriceBySku.get(skuProd) : null;
 
       const precioBase =
@@ -1329,13 +1464,13 @@ export default function EditarLicitacion() {
           : Number(prod[listaValida] ?? 0);
 
       const cantidad = Math.max(1, Number(it.cantidad || 1));
-      const precioConFlete = precioBase + fletePorUnidad;
 
       return {
         ...it,
         sku: skuProd || it.sku || "",
         precio: precioBase,
-        total: redondear(cantidad * precioConFlete),
+        precioUnitarioStr: "",
+        total: redondear(cantidad * (precioBase + fletePorUnidad)),
       };
     });
 
@@ -1373,12 +1508,15 @@ export default function EditarLicitacion() {
         precioCampania != null
           ? Number(precioCampania)
           : Number(prod[`lista${listado}`] ?? 0);
+
+      item.precioManual = false;
+      item.precioUnitarioStr = "";
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
-    const precioBase = Number(item.precio || 0);
-    const precioConFlete = precioBase + fletePorUnidad;
-    item.total = redondear(cantidad * precioConFlete);
+    item.total = redondear(
+      cantidad * (Number(item.precio || 0) + fletePorUnidad)
+    );
 
     copia[index] = item;
     setItems(copia);
@@ -1387,22 +1525,6 @@ export default function EditarLicitacion() {
   /* ============================================================
      OBS / CRUD / INSERT ENTRE ITEMS
   ============================================================ */
-  function crearItemVacio() {
-    return {
-      uid: generarUid(),
-      id_item: null,
-      sku: "",
-      producto: "",
-      categoria: "",
-      formato: "",
-      cantidad: 0,
-      precio: 0,
-      total: 0,
-      observacion: "",
-      mostrarObs: false,
-    };
-  }
-
   function toggleObservacion(index) {
     const copia = [...items];
     copia[index].mostrarObs = !copia[index].mostrarObs;
@@ -1458,67 +1580,126 @@ export default function EditarLicitacion() {
 
   /* ============================================================
      EXPORTAR PDF
+     ✅ pasa: id_licitacion + vendedor_* + número de ítem
   ============================================================ */
-  async function exportarPDF() {
-    setToast(null);
-    const fechaHoy = new Date().toISOString().slice(0, 10);
+ async function exportarPDF() {
+  setToast(null);
+  const fechaHoy = new Date().toISOString().slice(0, 10);
 
-    await generarPDFcotizacion({
-      numero_licitacion: id,
-      fecha_emision: fechaHoy,
+  const ITEMS_POR_PAGINA = 23;
 
-      nombre_entidad: nombreEntidad,
-      rut_entidad: rutEntidad,
-      direccion,
-      comuna,
-      contacto,
-      email,
-      telefono,
-      condicion_venta: condVenta,
+  const chunk = (arr, size) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  };
 
-      items_tabla: items
-        .map((it) => {
-          const skuTxt = String(it.sku || "").trim();
-          const fila = `
-            <tr>
-              <td>${skuTxt}</td>
-              <td>${it.producto}</td>
-              <td>${it.formato}</td>
-              <td>${it.cantidad}</td>
-              <td>$ ${formatear(Number(it.precio) + fletePorUnidad)}</td>
-              <td>$ ${formatear(it.total)}</td>
-            </tr>
-          `;
+  const partes = chunk(items, ITEMS_POR_PAGINA);
 
-          const filaObs = it.observacion
-            ? `
-            <tr>
-              <td></td>
-              <td colspan="5" style="font-style: italic; color: #444;">
-                Observación: ${it.observacion}
-              </td>
-            </tr>`
-            : "";
+  const pages = partes.map((itemsPagina, pageIndex) => {
+    const baseIndex = pageIndex * ITEMS_POR_PAGINA;
 
-          return fila + filaObs;
-        })
-        .join(""),
+    const items_tabla = itemsPagina
+      .map((it, idx) => {
+        const nro = baseIndex + idx + 1; // ✅ numeración global
+        const skuTxt = String(it.sku || "").trim();
+        const unitario = Number(it.precio || 0) + fletePorUnidad;
 
-      afecto: formatear(totalNeto),
-      iva: formatear(totalIVA),
-      total_con_iva: formatear(totalConIVA),
-    });
+        const fila = `
+          <tr>
+            <td>${nro}</td>
+            <td>${skuTxt}</td>
+            <td>${it.producto}</td>
+            <td>${it.formato}</td>
+            <td>${it.cantidad}</td>
+            <td>$ ${formatear(unitario)}</td>
+            <td>$ ${formatear(it.total)}</td>
+          </tr>
+        `;
 
-    setToast({
-      type: "success",
-      message: "PDF generado correctamente.",
-    });
-  }
+        const filaObs = it.observacion
+          ? `
+          <tr>
+            <td></td>
+            <td></td>
+            <td colspan="5" style="font-style: italic; color: #444;">
+              Observación: ${it.observacion}
+            </td>
+          </tr>`
+          : "";
+
+        return fila + filaObs;
+      })
+      .join("");
+
+    return {
+      items_tabla,
+      // (no lo usamos directamente, pero lo dejo por claridad)
+      showBottom: pageIndex === partes.length - 1,
+    };
+  });
+
+  const vendedor_nombre = (vendedorNombre || "").toString();
+  const vendedor_celular = (vendedorCelular || "").toString();
+  const vendedor_correo = (vendedorCorreo || "").toString();
+
+  await generarPDFcotizacion({
+    numero_licitacion: id,
+    id_licitacion: idLicitacionInput,
+    fecha_emision: fechaHoy,
+
+    nombre_entidad: nombreEntidad,
+    rut_entidad: rutEntidad,
+    direccion,
+    comuna,
+    contacto,
+    email,
+    telefono,
+    condicion_venta: condVenta,
+
+    vendedor_nombre,
+    vendedor_celular,
+    vendedor_correo,
+    vendedor_ccorreo: vendedor_correo,
+
+    observaciones: (observaciones ?? "").toString(),
+
+    // ✅ acá va la magia
+    pages,
+
+    afecto: formatear(totalNeto),
+    iva: formatear(totalIVA),
+    total_con_iva: formatear(totalConIVA),
+  });
+
+  setToast({ type: "success", message: "PDF generado correctamente." });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /* ============================================================
      GUARDAR CAMBIOS
      ✅ SKU opcional
      ✅ Municipalidad/Contacto/Email/Teléfono NO obligatorios
+     ✅ guarda observaciones
+     (vendedor_* NO se toca aquí para evitar errores si no existen columnas)
   ============================================================ */
   async function guardarCambios() {
     setToast(null);
@@ -1581,6 +1762,8 @@ export default function EditarLicitacion() {
         total_con_iva: totalConIVA,
         total_sin_iva: totalNeto,
         total_iva: totalIVA,
+
+        observaciones: observaciones || null,
       })
       .eq("id", id);
 
@@ -1601,13 +1784,7 @@ export default function EditarLicitacion() {
       const precio = Number(it?.precio ?? 0);
 
       const tieneAlgo =
-        sku ||
-        producto ||
-        formato ||
-        categoria ||
-        obs ||
-        cantidad > 0 ||
-        precio > 0;
+        sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
 
       return tieneAlgo;
     });
@@ -1626,8 +1803,7 @@ export default function EditarLicitacion() {
       if (faltan.length > 0) {
         setToast({
           type: "error",
-          message:
-            `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
+          message: `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
         });
         return false;
       }
@@ -1636,6 +1812,7 @@ export default function EditarLicitacion() {
     // 3) UPSERT (SKU opcional -> null)
     for (const it of itemsParaGuardar) {
       const skuLimpio = String(it?.sku ?? "").trim();
+
       const payload = {
         licitacion_id: id,
         producto: String(it?.producto ?? ""),
@@ -1861,9 +2038,7 @@ export default function EditarLicitacion() {
 
       {/* DATOS ENTIDAD */}
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-semibold text-gray-800">
-          Datos de la Entidad
-        </h2>
+        <h2 className="text-xl font-semibold text-gray-800">Datos de la Entidad</h2>
 
         <button
           className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
@@ -1924,7 +2099,7 @@ export default function EditarLicitacion() {
             />
           </div>
 
-          {/* ✅ Región (react-select buscable) */}
+          {/* Región */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Región *
@@ -1940,12 +2115,12 @@ export default function EditarLicitacion() {
               onChange={(op) => {
                 const nuevaRegion = op ? op.value : "";
                 setRegion(nuevaRegion);
-                setComuna(""); // ✅ reset comuna
+                setComuna("");
               }}
             />
           </div>
 
-          {/* ✅ Comuna (react-select buscable) */}
+          {/* Comuna */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Comuna *
@@ -2148,14 +2323,28 @@ export default function EditarLicitacion() {
                         />
                       </div>
 
-                      {/* Precio Unitario */}
+                      {/* Precio Unitario (editable) */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Precio Unitario
                         </label>
-                        <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
-                          ${(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
-                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm font-semibold bg-white"
+                          value={
+                            (it.precioUnitarioStr ?? "") !== ""
+                              ? it.precioUnitarioStr
+                              : formatearCLDesdeString(
+                                  String(
+                                    Number(it.precio || 0) +
+                                      Number(fletePorUnidad || 0)
+                                  )
+                                )
+                          }
+                          onChange={(e) => actualizarPrecioUnitario(index, e.target.value)}
+                        />
                       </div>
 
                       {/* Total */}
@@ -2175,6 +2364,7 @@ export default function EditarLicitacion() {
                             onClick={() => toggleObservacion(index)}
                             className="cursor-pointer bg-gray-300 rounded-md w-10 h-10 text-base shadow hover:bg-gray-400 flex items-center justify-center"
                             title="Observación"
+                            type="button"
                           >
                             {it.mostrarObs ? "–" : "+"}
                           </button>
@@ -2183,6 +2373,7 @@ export default function EditarLicitacion() {
                             <button
                               onClick={() => eliminarItem(index)}
                               className="cursor-pointer bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow hover:bg-red-700"
+                              type="button"
                             >
                               Eliminar
                             </button>
@@ -2312,12 +2503,26 @@ export default function EditarLicitacion() {
             <div
               className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
             >
-              {porcentajePresupuesto > 0
-                ? porcentajePresupuesto.toFixed(2) + "%"
-                : "0%"}
+              {porcentajePresupuesto > 0 ? porcentajePresupuesto.toFixed(2) + "%" : "0%"}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* OBSERVACIONES GENERALES */}
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Observaciones</h2>
+
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Observaciones generales
+        </label>
+
+        <textarea
+          className="w-full min-h-[110px] rounded-md border border-gray-300 px-3 py-2 text-sm"
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          placeholder="Escribe observaciones generales para la licitación…"
+        />
       </div>
 
       {/* BOTONES */}
@@ -2325,6 +2530,7 @@ export default function EditarLicitacion() {
         <button
           onClick={agregarItem}
           className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700"
+          type="button"
         >
           + Agregar Ítem
         </button>
@@ -2332,6 +2538,7 @@ export default function EditarLicitacion() {
         <button
           onClick={guardarCambios}
           className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
+          type="button"
         >
           Guardar Cambios
         </button>
@@ -2339,6 +2546,7 @@ export default function EditarLicitacion() {
         <button
           onClick={exportarPDF}
           className="cursor-pointer bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897]"
+          type="button"
         >
           Generar PDF
         </button>

@@ -562,10 +562,14 @@ function crearItemVacio() {
     categoria: "",
     formato: "",
     cantidad: 0,
-    precio: 0,
+    precio: 0, // precio base (sin flete)
     total: 0,
     observacion: "",
     mostrarObs: false,
+
+    // ✅ NUEVO (Precio Unitario editable)
+    precioManual: false,
+    precioUnitarioStr: "", // string formateado para input
   };
 }
 
@@ -615,8 +619,8 @@ export default function CrearLicitacion() {
 
   // ✅ vendedor (perfil)
   const [perfilNombre, setPerfilNombre] = useState("");
-  const [perfilEmail, setPerfilEmail] = useState(""); // ✅ nuevo
-  const [perfilCelular, setPerfilCelular] = useState(""); // ✅ nuevo
+  const [perfilEmail, setPerfilEmail] = useState("");
+  const [perfilCelular, setPerfilCelular] = useState("");
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -637,7 +641,6 @@ export default function CrearLicitacion() {
       // ✅ email viene de auth
       setPerfilEmail(user.email || "");
 
-      // ✅ ahora también leemos celular
       const { data: perfil, error: perfilErr } = await supabase
         .from("profiles")
         .select("rol, nombre, celular")
@@ -917,7 +920,35 @@ export default function CrearLicitacion() {
       : 0;
 
   /* ============================================================
+     ✅ Precio Unitario editable (incluye flete)
+  ============================================================ */
+  function actualizarPrecioUnitario(index, valorStr) {
+    const copia = [...items];
+    const item = { ...copia[index] };
+
+    // string formateado (con puntos)
+    item.precioUnitarioStr = formatearCLDesdeString(valorStr);
+
+    // número ingresado representa el precio unitario visible (incluye flete)
+    const unitConFlete = parseMontoCL(item.precioUnitarioStr);
+
+    // convertir a precio base (sin flete)
+    const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
+
+    item.precio = baseSinFlete;
+    item.precioManual = true;
+
+    const cantidad = Math.max(1, Number(item.cantidad || 1));
+    const precioConFlete = Number(item.precio || 0) + Number(fletePorUnidad || 0);
+    item.total = redondear(cantidad * precioConFlete);
+
+    copia[index] = item;
+    setItems(copia);
+  }
+
+  /* ============================================================
      CAMBIO DE LISTA (✅ FIX: funciona aunque falte SKU)
+     ✅ NO pisa precios manuales
   ============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((it) => {
@@ -932,11 +963,15 @@ export default function CrearLicitacion() {
 
       const precioBase = getPrecioBaseParaSKU(prod, nuevaLista, campaignPrices);
       const cantidad = Math.max(1, Number(it.cantidad || 1));
-      const precioConFlete = precioBase + fletePorUnidad;
+
+      const precioBaseFinal = it.precioManual ? Number(it.precio || 0) : precioBase;
+      const precioConFlete = precioBaseFinal + fletePorUnidad;
 
       return {
         ...it,
-        precio: precioBase,
+        precio: precioBaseFinal,
+        // si es manual, mantenemos lo que escribió; si no, lo dejamos vacío (se muestra derivado)
+        precioUnitarioStr: it.precioManual ? (it.precioUnitarioStr || "") : "",
         total: redondear(cantidad * precioConFlete),
       };
     });
@@ -968,7 +1003,13 @@ export default function CrearLicitacion() {
       item.producto = prod.nombre || "";
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
+
+      // ✅ precio automático por lista/campaña
       item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+
+      // ✅ al seleccionar producto, volvemos a automático
+      item.precioManual = false;
+      item.precioUnitarioStr = "";
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
@@ -1005,12 +1046,29 @@ export default function CrearLicitacion() {
     setItems(copia);
   }
 
-  /* recalcular totales con flete */
+  /* ============================================================
+     ✅ recalcular totales con flete
+     - si precio es manual y existe precioUnitarioStr, mantener el unitario (con flete) constante
+  ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
 
     const copia = items.map((it) => {
       const cantidad = Math.max(1, Number(it.cantidad || 1));
+
+      // si es manual y hay string, ajustamos base para mantener constante el unitario visible
+      if (it.precioManual && (it.precioUnitarioStr ?? "") !== "") {
+        const unitConFlete = parseMontoCL(it.precioUnitarioStr);
+        const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
+        const precioConFlete = baseSinFlete + Number(fletePorUnidad || 0);
+
+        return {
+          ...it,
+          precio: baseSinFlete,
+          total: redondear(cantidad * precioConFlete),
+        };
+      }
+
       const precioBase = Number(it.precio || 0);
       const precioConFlete = precioBase + fletePorUnidad;
 
@@ -1024,6 +1082,9 @@ export default function CrearLicitacion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fletePorUnidad, hydrated]);
 
+  /* ============================================================
+     ✅ campañas: NO pisa precios manuales
+  ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
     if (!productos?.length) return;
@@ -1032,6 +1093,9 @@ export default function CrearLicitacion() {
     if (!tieneCamp) return;
 
     const copia = items.map((it) => {
+      // ✅ manual: no tocar (el useEffect de flete ya recalcula total)
+      if (it.precioManual) return it;
+
       const sku = String(it.sku || "").trim();
       const prod =
         (sku
@@ -1048,6 +1112,7 @@ export default function CrearLicitacion() {
       return {
         ...it,
         precio: precioBase,
+        precioUnitarioStr: "",
         total: redondear(cantidad * precioConFlete),
       };
     });
@@ -1145,7 +1210,9 @@ export default function CrearLicitacion() {
   }
 
   /* ============================================================
-     GUARDAR LICITACIÓN (✅ FIX: SKU null si viene vacío)
+     GUARDAR LICITACIÓN
+     ✅ guarda created_by y persiste vendedor_nombre/celular/correo en la tabla licitaciones
+     ✅ SKU null si viene vacío
   ============================================================ */
   async function guardarLicitacion() {
     setToast(null);
@@ -1187,6 +1254,11 @@ export default function CrearLicitacion() {
       setToast({ type: "error", message: "Sesión no válida. Vuelve a iniciar." });
       return;
     }
+
+    // ✅ vendedor final (se guarda en BD y se usa para PDF)
+    const vendedorNombreFinal = (perfilNombre || "").toString().trim();
+    const vendedorCorreoFinal = (user.email || perfilEmail || "").toString().trim();
+    const vendedorCelularFinal = (perfilCelular || "").toString().trim();
 
     try {
       await crearClienteSiNoExiste();
@@ -1231,7 +1303,11 @@ export default function CrearLicitacion() {
 
           observaciones: observaciones || null,
 
+          // ✅ NUEVO: persistencia para edición/export
           created_by: user.id,
+          vendedor_nombre: vendedorNombreFinal || null,
+          vendedor_celular: vendedorCelularFinal || null,
+          vendedor_correo: vendedorCorreoFinal || null,
         },
       ])
       .select("id")
@@ -1254,6 +1330,7 @@ export default function CrearLicitacion() {
           producto: it.producto,
           formato: it.formato,
           cantidad: Number(it.cantidad),
+          // ✅ unitario final (incluye flete)
           valor_unitario: Number(it.precio) + fletePorUnidad,
           sku: skuLimpio ? skuLimpio : null,
           total: Number(it.total),
@@ -1263,21 +1340,16 @@ export default function CrearLicitacion() {
       ]);
     }
 
-    // ✅ PDF:
-    // - numero_licitacion: dejamos el ID interno (lic.id) para el N° de cotización (como antes)
-    // - id_licitacion: ✅ AHORA ES idLicitacionInput (lo que pones en el formulario)
-    // - vendedor_*: ✅ viene de profiles + auth
     await generarPDFcotizacion({
-      numero_licitacion: idLicitacion, // N° Cotización (como lo tenías)
-      id_licitacion: idLicitacionInput, // ✅ ID Licitación en el template
+      numero_licitacion: idLicitacion,
+      id_licitacion: idLicitacionInput,
       fecha_emision: fechaHoy,
 
-      // ✅ Datos vendedor (template: {{vendedor_nombre}}, {{vendedor_correo}}, {{vendedor_celular}})
-      vendedor_nombre: (perfilNombre ?? "").toString(),
-      vendedor_correo: (user.email ?? perfilEmail ?? "").toString(),
-      vendedor_celular: (perfilCelular ?? "").toString(),
+      // ✅ consistente con lo guardado en BD
+      vendedor_nombre: vendedorNombreFinal,
+      vendedor_correo: vendedorCorreoFinal,
+      vendedor_celular: vendedorCelularFinal,
 
-      // Cliente
       nombre_entidad: nombreEntidad,
       rut_entidad: rutEntidad,
       direccion,
@@ -1287,12 +1359,12 @@ export default function CrearLicitacion() {
       telefono,
       condicion_venta: condVenta,
 
-      // Observaciones generales (template: {{observaciones}})
       observaciones: (observaciones ?? "").toString(),
 
       items_tabla: items
         .map((it, idx) => {
           const skuTxt = String(it.sku || "").trim();
+          const unitario = Number(it.precio) + fletePorUnidad;
 
           const fila = `
             <tr>
@@ -1301,7 +1373,7 @@ export default function CrearLicitacion() {
               <td>${it.producto}</td>
               <td>${it.formato}</td>
               <td style="text-align:center;">${it.cantidad}</td>
-              <td>$ ${formatear(Number(it.precio) + fletePorUnidad)}</td>
+              <td>$ ${formatear(unitario)}</td>
               <td>$ ${formatear(it.total)}</td>
             </tr>
           `;
@@ -1821,14 +1893,30 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Precio Unitario */}
+                      {/* Precio Unitario (✅ editable, incluye flete) */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Precio Unitario
                         </label>
-                        <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 text-sm font-semibold">
-                          ${(Number(it.precio) + fletePorUnidad).toLocaleString("es-CL")}
-                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm font-semibold bg-white"
+                          value={
+                            (it.precioUnitarioStr ?? "").toString() !== ""
+                              ? it.precioUnitarioStr
+                              : formatearCLDesdeString(
+                                  String(
+                                    Number(it.precio || 0) +
+                                      Number(fletePorUnidad || 0)
+                                  )
+                                )
+                          }
+                          onChange={(e) =>
+                            actualizarPrecioUnitario(index, e.target.value)
+                          }
+                        />
                       </div>
 
                       {/* Total */}
@@ -1996,7 +2084,7 @@ export default function CrearLicitacion() {
       </div>
 
       {/* ============================================================
-          OBSERVACIONES (NUEVA SECCIÓN AL FINAL)
+          OBSERVACIONES (SECCIÓN AL FINAL)
       ============================================================ */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Observaciones</h2>

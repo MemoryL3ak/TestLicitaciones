@@ -175,12 +175,6 @@
       width: var(--obs-width);
       box-sizing: border-box;
 
-      /*
-        ✅ Esto es lo importante:
-        - Si el cuadro mide 560px y la columna derecha 260px,
-          lo movemos 300px a la izquierda para que el borde derecho
-          quede exactamente alineado con la columna.
-      */
       margin-left: calc(var(--right-col-width) - var(--obs-width));
       margin-right: 0;
 
@@ -216,78 +210,83 @@
     crossOrigin="anonymous"
   />
 
-  <!-- HEADER -->
-  <div class="header">
-    <div style="display:flex; gap: 12px;">
-      <img class="logo" src="https://i.ibb.co/RGb0W84B/Amsodent.png" crossOrigin="anonymous" />
+  <!-- ✅ TODO LO SUPERIOR (ENCABEZADO + DATOS) VA DENTRO DE ESTE BLOQUE -->
+  <div class="top-sections">
 
-      <div class="empresa-info">
-        <div class="empresa-nombre">Amsodent Medical Spa</div>
-        R.U.T.: 78.087.954-8<br>
-        Giro: Venta de Insumos Médicos y Dentales<br>
-        Matriz: 1° Mayo 45, San Bernardo<br>
-        Tel: +56940943030<br>
-        Email: ventas@amsodentmedical.cl
+    <!-- HEADER -->
+    <div class="header">
+      <div style="display:flex; gap: 12px;">
+        <img class="logo" src="https://i.ibb.co/RGb0W84B/Amsodent.png" crossOrigin="anonymous" />
+
+        <div class="empresa-info">
+          <div class="empresa-nombre">Amsodent Medical Spa</div>
+          R.U.T.: 78.087.954-8<br>
+          Giro: Venta de Insumos Médicos y Dentales<br>
+          Matriz: 1° Mayo 45, San Bernardo<br>
+          Tel: +56940943030<br>
+          Email: ventas@amsodentmedical.cl
+        </div>
+      </div>
+
+      <div class="cot-box">
+        <div class="cot-titulo">COTIZACIÓN</div>
+        Nº {{numero_licitacion}}
       </div>
     </div>
 
-    <div class="cot-box">
-      <div class="cot-titulo">COTIZACIÓN</div>
-      Nº {{numero_licitacion}}
-    </div>
+    <!-- FECHA + ID LICITACIÓN -->
+    <div class="section-title">Fecha de Emisión</div>
+
+    <table class="info-table">
+      <tr>
+        <td class="label">Fecha:</td>
+        <td class="value">{{fecha_emision}}</td>
+        <td class="label">ID Licitación:</td>
+        <td class="value-right">{{id_licitacion}}</td>
+      </tr>
+    </table>
+
+    <!-- DATOS DEL CLIENTE -->
+    <div class="section-title">Datos del Cliente</div>
+
+    <table class="info-table">
+      <tr>
+        <td class="label">Señor(es):</td><td class="value">{{nombre_entidad}}</td>
+        <td class="label">Contacto:</td><td class="value-right">{{contacto}}</td>
+      </tr>
+      <tr>
+        <td class="label">RUT:</td><td class="value">{{rut_entidad}}</td>
+        <td class="label">Email:</td><td class="value-right">{{email}}</td>
+      </tr>
+      <tr>
+        <td class="label">Dirección:</td><td class="value">{{direccion}}</td>
+        <td class="label">Teléfono:</td><td class="value-right">{{telefono}}</td>
+      </tr>
+      <tr>
+        <td class="label">Comuna:</td><td class="value">{{comuna}}</td>
+        <td class="label">Cond. Venta:</td><td class="value-right">{{condicion_venta}}</td>
+      </tr>
+    </table>
+
+    <!-- DATOS DEL VENDEDOR -->
+    <div class="section-title">Datos de Vendedor</div>
+
+    <table class="info-table">
+      <tr>
+        <td class="label">Nombre:</td><td class="value">{{vendedor_nombre}}</td>
+        <td class="label">Correo:</td><td class="value-right">{{vendedor_correo}}</td>
+      </tr>
+      <tr>
+        <td class="label">Celular:</td><td class="value">{{vendedor_celular}}</td>
+        <td class="label"></td><td class="value-right"></td>
+      </tr>
+    </table>
+
+    <!-- TITULO DE ITEMS (se elimina en hoja 2+ junto con top-sections) -->
+    <div class="section-title">Detalle de Productos</div>
   </div>
 
-  <!-- FECHA + ID LICITACIÓN -->
-  <div class="section-title">Fecha de Emisión</div>
-
-  <table class="info-table">
-    <tr>
-      <td class="label">Fecha:</td>
-      <td class="value">{{fecha_emision}}</td>
-      <td class="label">ID Licitación:</td>
-      <td class="value-right">{{id_licitacion}}</td>
-    </tr>
-  </table>
-
-  <!-- DATOS DEL CLIENTE -->
-  <div class="section-title">Datos del Cliente</div>
-
-  <table class="info-table">
-    <tr>
-      <td class="label">Señor(es):</td><td class="value">{{nombre_entidad}}</td>
-      <td class="label">Contacto:</td><td class="value-right">{{contacto}}</td>
-    </tr>
-    <tr>
-      <td class="label">RUT:</td><td class="value">{{rut_entidad}}</td>
-      <td class="label">Email:</td><td class="value-right">{{email}}</td>
-    </tr>
-    <tr>
-      <td class="label">Dirección:</td><td class="value">{{direccion}}</td>
-      <td class="label">Teléfono:</td><td class="value-right">{{telefono}}</td>
-    </tr>
-    <tr>
-      <td class="label">Comuna:</td><td class="value">{{comuna}}</td>
-      <td class="label">Cond. Venta:</td><td class="value-right">{{condicion_venta}}</td>
-    </tr>
-  </table>
-
-  <!-- DATOS DEL VENDEDOR -->
-  <div class="section-title">Datos de Vendedor</div>
-
-  <table class="info-table">
-    <tr>
-      <td class="label">Nombre:</td><td class="value">{{vendedor_nombre}}</td>
-      <td class="label">Correo:</td><td class="value-right">{{vendedor_correo}}</td>
-    </tr>
-    <tr>
-      <td class="label">Celular:</td><td class="value">{{vendedor_celular}}</td>
-      <td class="label"></td><td class="value-right"></td>
-    </tr>
-  </table>
-
   <!-- ITEMS -->
-  <div class="section-title">Detalle de Productos</div>
-
   <table>
     <thead>
       <tr>

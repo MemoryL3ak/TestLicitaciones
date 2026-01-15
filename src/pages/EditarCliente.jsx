@@ -1,12 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import { Link, useParams } from "react-router-dom";
 import { REGIONES_CHILE } from "../constants/regiones";
-
-/* ===============================
-   REGIONES / COMUNAS
-================================ */
 
 export default function EditarCliente() {
   const { id } = useParams();
@@ -25,6 +21,11 @@ export default function EditarCliente() {
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [condVenta, setCondVenta] = useState("");
+
+  // ✅ lista comunas segura (nunca undefined)
+  const comunasDisponibles = useMemo(() => {
+    return (REGIONES_CHILE?.[region] ?? []);
+  }, [region]);
 
   /* ============================================================
      CARGAR CLIENTE
@@ -49,37 +50,58 @@ export default function EditarCliente() {
         return;
       }
 
-      setRut(data.rut || "");
-      setNombre(data.nombre || "");
-      setDepartamento(data.departamento || "");
-      setMunicipalidad(data.municipalidad || "");
-      setRegion(data.region || "");
-      setComuna(data.comuna || "");
-      setDireccion(data.direccion || "");
-      setContacto(data.contacto || "");
-      setEmail(data.email || "");
-      setTelefono(data.telefono || "");
-      setCondVenta(data.condiciones_venta || "");
+      // ✅ normaliza strings (evita keys que no calzan por espacios)
+      const regionDB = (data.region || "").toString().trim();
+      const comunaDB = (data.comuna || "").toString().trim();
+
+      setRut((data.rut || "").toString());
+      setNombre((data.nombre || "").toString());
+      setDepartamento((data.departamento || "").toString());
+      setMunicipalidad((data.municipalidad || "").toString());
+      setRegion(regionDB);
+      setComuna(comunaDB);
+      setDireccion((data.direccion || "").toString());
+      setContacto((data.contacto || "").toString());
+      setEmail((data.email || "").toString());
+      setTelefono((data.telefono || "").toString());
+      setCondVenta((data.condiciones_venta || "").toString());
 
       setLoading(false);
+
+      // ✅ si la región en BD no existe en el diccionario, avisar (sin romper)
+      if (regionDB && !(regionDB in (REGIONES_CHILE || {}))) {
+        setToast({
+          type: "error",
+          message:
+            `La región guardada "${regionDB}" no existe en REGIONES_CHILE.\n` +
+            `Selecciona una región válida para continuar.`,
+        });
+      }
     }
 
     cargarCliente();
   }, [id]);
 
   /* ============================================================
+     SI CAMBIA REGIÓN: reset comuna si no pertenece
+  ============================================================ */
+  useEffect(() => {
+    if (!region) {
+      if (comuna) setComuna("");
+      return;
+    }
+
+    // si la comuna actual no está en la nueva región, la limpiamos
+    if (comuna && !(comunasDisponibles || []).includes(comuna)) {
+      setComuna("");
+    }
+  }, [region, comunasDisponibles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ============================================================
      GUARDAR CAMBIOS
   ============================================================ */
   async function guardarCambios() {
-    if (
-      !rut ||
-      !nombre ||
-      !region ||
-      !comuna ||
-      !direccion ||
-      !contacto ||
-      !email
-    ) {
+    if (!rut || !nombre || !region || !comuna || !direccion || !contacto || !email) {
       setToast({
         type: "error",
         message: "Debes completar todos los campos obligatorios.",
@@ -147,7 +169,6 @@ export default function EditarCliente() {
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
           {/* RUT */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -205,12 +226,13 @@ export default function EditarCliente() {
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={region}
               onChange={(e) => {
-                setRegion(e.target.value);
+                const r = (e.target.value || "").trim();
+                setRegion(r);
                 setComuna("");
               }}
             >
               <option value="">Seleccione región</option>
-              {Object.keys(REGIONES_CHILE).map((r) => (
+              {Object.keys(REGIONES_CHILE || {}).map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -226,18 +248,19 @@ export default function EditarCliente() {
             <select
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               value={comuna}
-              onChange={(e) => setComuna(e.target.value)}
+              onChange={(e) => setComuna((e.target.value || "").trim())}
               disabled={!region}
             >
               <option value="">
                 {region ? "Seleccione comuna" : "Seleccione región primero"}
               </option>
-              {region &&
-                REGIONES_CHILE[region].map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
+
+              {/* ✅ FIX: map seguro */}
+              {(comunasDisponibles ?? []).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
           </div>
 

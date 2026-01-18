@@ -2,7 +2,8 @@ import { Link, useLocation, Outlet } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useEffect, useState } from "react";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext";
-import SessionTracker from "../components/SessionTracker"; // ✅ NUEVO
+import SessionTracker from "../components/SessionTracker";
+import PresenceTracker from "../components/PresenceTracker";
 
 const ROLE_LABELS = {
   admin: "Administrador",
@@ -29,15 +30,11 @@ export default function SidebarLayout() {
       : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50";
 
   function onNavClick(e, to) {
-    // respetar ctrl/cmd click etc
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
     requestNavigation(to);
   }
 
-  /* ================================
-     CARGAR PERFIL
-  ================================ */
   useEffect(() => {
     async function cargarPerfil() {
       const { data: authData } = await supabase.auth.getUser();
@@ -46,9 +43,9 @@ export default function SidebarLayout() {
 
       const { data: perfilDB } = await supabase
         .from("profiles")
-        .select("nombre, rol, email")
-        .eq("email", user.email)
-        .single();
+        .select("id, nombre, rol, email")
+        .eq("id", user.id)
+        .maybeSingle();
 
       const nombre = perfilDB?.nombre || user.email;
       const rolDB = perfilDB?.rol || "usuario";
@@ -64,10 +61,18 @@ export default function SidebarLayout() {
     cargarPerfil();
   }, []);
 
-  /* ================================
-     LOGOUT
-  ================================ */
   async function cerrarSesion() {
+    // ✅ Cerrar presence “best-effort” antes de redirigir
+    try {
+      const ch = window.__presenceChannel;
+      if (ch) {
+        await ch.untrack();
+        supabase.removeChannel(ch);
+      }
+    } catch {
+      // best effort
+    }
+
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
@@ -76,13 +81,11 @@ export default function SidebarLayout() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* ✅ TRACKER GLOBAL (20 min inactividad + heartbeat a BD) */}
       <SessionTracker />
+      <PresenceTracker />
 
-      {/* HEADER STICKY */}
       <header className="sticky top-0 z-50 w-full bg-white px-6 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          {/* MENÚ */}
           <nav className="flex items-center gap-2 flex-wrap">
             <Link
               to="/crear"
@@ -124,7 +127,6 @@ export default function SidebarLayout() {
               Clientes
             </Link>
 
-            {/* ✅ NUEVO: CAMPAÑAS */}
             <Link
               to="/campanas"
               onClick={(e) => onNavClick(e, "/campanas")}
@@ -135,9 +137,7 @@ export default function SidebarLayout() {
               Campañas
             </Link>
 
-            {/* ✅ SOLO ADMIN: MONITOREO */}
-            {/*
-            {esAdmin && ( 
+            {esAdmin && (
               <Link
                 to="/monitoreo"
                 onClick={(e) => onNavClick(e, "/monitoreo")}
@@ -148,10 +148,8 @@ export default function SidebarLayout() {
                 Monitoreo
               </Link>
             )}
-              */}
           </nav>
 
-          {/* PERFIL + LOGOUT */}
           <div className="flex items-center gap-4">
             {perfil && (
               <div className="flex items-center gap-3">
@@ -159,9 +157,7 @@ export default function SidebarLayout() {
                   <div className="font-semibold text-gray-900 text-sm whitespace-nowrap">
                     Bienvenido, {perfil.nombre}
                   </div>
-                  <div className="text-xs text-gray-500 whitespace-nowrap">
-                    {perfil.rolLabel}
-                  </div>
+                  <div className="text-xs text-gray-500 whitespace-nowrap">{perfil.rolLabel}</div>
                 </div>
 
                 <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-lg shadow">
@@ -180,7 +176,6 @@ export default function SidebarLayout() {
         </div>
       </header>
 
-      {/* CONTENIDO */}
       <main className="max-w-7xl mx-auto p-8">
         <Outlet />
       </main>

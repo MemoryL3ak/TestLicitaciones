@@ -3,9 +3,11 @@ import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
 
 const IDLE_LOGOUT_MS = 20 * 60 * 1000; // 20 min
-const TICK_MS = 5 * 1000;             // cada 5s calculo activo/idle
-const FLUSH_MS = 60 * 1000;           // cada 60s persisto a BD
-const ACTIVE_GRACE_MS = 60 * 1000;    // si hubo actividad en el último 1 min => "activo"
+const TICK_MS = 5 * 1000;             // cada 5s calculo activo/idle local
+const FLUSH_MS = 15 * 1000;           // heartbeat a BD cada 15s
+const ACTIVE_GRACE_MS = 60 * 1000;    // actividad reciente <= 60s => "activo"
+
+const LS_KEY = "lici_session_id";
 
 export default function SessionTracker() {
   const navigate = useNavigate();
@@ -20,7 +22,7 @@ export default function SessionTracker() {
   const lastTickRef = useRef(Date.now());
   const lastFlushRef = useRef(Date.now());
 
-  // registra actividad del usuario
+  // registrar actividad del usuario
   useEffect(() => {
     const touch = () => (lastActivityRef.current = Date.now());
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
@@ -35,6 +37,7 @@ export default function SessionTracker() {
 
   useEffect(() => {
     let tickInterval = null;
+    let stopped = false;
 
     async function start() {
       const { data: auth } = await supabase.auth.getUser();
@@ -43,16 +46,42 @@ export default function SessionTracker() {
 
       userIdRef.current = user.id;
 
-      // ✅ cerrar "sesiones abiertas" anteriores del mismo usuario (evita duplicados)
-      await supabase
-        .from("user_sessions")
-        .update({ ended_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .is("ended_at", null);
+      // reset relojes
+      lastTickRef.current = Date.now();
+      lastFlushRef.current = Date.now();
+      lastActivityRef.current = Date.now();
 
       const nowIso = new Date().toISOString();
 
-      // ✅ crea fila de sesión (con tus columnas reales)
+      // ✅ Reusar session_id de este navegador si existe y sigue abierta
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored) {
+        const { data: srow, error: eCheck } = await supabase
+          .from("user_sessions")
+          .select("id, ended_at")
+          .eq("id", stored)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!eCheck && srow?.id && !srow.ended_at) {
+          sessionIdRef.current = srow.id;
+
+          await supabase
+            .from("user_sessions")
+            .update({
+              last_seen_at: nowIso,
+              last_activity_at: nowIso,
+              forced_logout: false,
+            })
+            .eq("id", srow.id);
+
+          // loop
+          tickInterval = setInterval(loopTick, TICK_MS);
+          return;
+        }
+      }
+
+      // ✅ si no hay session reusable, crear nueva
       const { data: ins, error } = await supabase
         .from("user_sessions")
         .insert([
@@ -73,31 +102,36 @@ export default function SessionTracker() {
       }
 
       sessionIdRef.current = ins.id;
+      localStorage.setItem(LS_KEY, ins.id);
 
-      tickInterval = setInterval(async () => {
-        const now = Date.now();
-        const dt = now - lastTickRef.current;
-        lastTickRef.current = now;
+      tickInterval = setInterval(loopTick, TICK_MS);
+    }
 
-        const idleFor = now - lastActivityRef.current;
+    async function loopTick() {
+      if (stopped) return;
 
-        // auto-logout por inactividad
-        if (idleFor >= IDLE_LOGOUT_MS) {
-          await flush(now); // best effort para no perder el último tramo
-          await forceLogout();
-          return;
-        }
+      const now = Date.now();
+      const dt = now - lastTickRef.current;
+      lastTickRef.current = now;
 
-        // acumular activo vs idle localmente
-        if (idleFor <= ACTIVE_GRACE_MS) activeAccRef.current += dt;
-        else idleAccRef.current += dt;
+      const idleFor = now - lastActivityRef.current;
 
-        // flush a BD cada FLUSH_MS
-        if (now - lastFlushRef.current >= FLUSH_MS) {
-          lastFlushRef.current = now;
-          await flush(now);
-        }
-      }, TICK_MS);
+      // auto-logout por inactividad
+      if (idleFor >= IDLE_LOGOUT_MS) {
+        await flush(now);
+        await forceLogout();
+        return;
+      }
+
+      // acumular activo vs idle localmente
+      if (idleFor <= ACTIVE_GRACE_MS) activeAccRef.current += dt;
+      else idleAccRef.current += dt;
+
+      // flush a BD
+      if (now - lastFlushRef.current >= FLUSH_MS) {
+        lastFlushRef.current = now;
+        await flush(now);
+      }
     }
 
     async function flush(nowMs) {
@@ -108,22 +142,27 @@ export default function SessionTracker() {
       const activeSec = Math.floor(activeAccRef.current / 1000);
       const idleSec = Math.floor(idleAccRef.current / 1000);
 
+      // reset acumuladores
       activeAccRef.current = 0;
       idleAccRef.current = 0;
 
       const nowIso = new Date(nowMs).toISOString();
-      const day = new Date(nowMs).toISOString().slice(0, 10); // YYYY-MM-DD
+      const day = new Date(nowMs).toISOString().slice(0, 10);
 
-      // update sesión (tus columnas)
-      await supabase
+      // ✅ update sesión (heartbeat)
+      const { error: eUpd } = await supabase
         .from("user_sessions")
         .update({
           last_seen_at: nowIso,
           last_activity_at: new Date(lastActivityRef.current).toISOString(),
+          ended_at: null,       // si algún cleanup la cerró, la reabre mientras haya heartbeat
+          forced_logout: false,
         })
         .eq("id", session_id);
 
-      // asegurar fila diaria (tus columnas)
+      if (eUpd) console.error("user_sessions update error:", eUpd);
+
+      // ✅ mantener user_activity_daily (opcional: si ya no lo usarás, puedes quitarlo)
       await supabase
         .from("user_activity_daily")
         .upsert(
@@ -140,32 +179,40 @@ export default function SessionTracker() {
         );
 
       if (activeSec > 0 || idleSec > 0) {
-        const { data: row, error: eSel } = await supabase
+        const { data: row } = await supabase
           .from("user_activity_daily")
           .select("active_seconds, idle_seconds")
           .eq("user_id", user_id)
           .eq("day", day)
           .single();
 
-        if (!eSel) {
-          await supabase
-            .from("user_activity_daily")
-            .update({
-              active_seconds: (row?.active_seconds || 0) + activeSec,
-              idle_seconds: (row?.idle_seconds || 0) + idleSec,
-              last_seen_at: nowIso,
-            })
-            .eq("user_id", user_id)
-            .eq("day", day);
-        }
+        await supabase
+          .from("user_activity_daily")
+          .update({
+            active_seconds: (row?.active_seconds || 0) + activeSec,
+            idle_seconds: (row?.idle_seconds || 0) + idleSec,
+            last_seen_at: nowIso,
+          })
+          .eq("user_id", user_id)
+          .eq("day", day);
       } else {
-        // igual actualiza last_seen_at
         await supabase
           .from("user_activity_daily")
           .update({ last_seen_at: nowIso })
           .eq("user_id", user_id)
           .eq("day", day);
       }
+    }
+
+    async function endSessionBestEffort() {
+      const session_id = sessionIdRef.current;
+      if (!session_id) return;
+      const nowIso = new Date().toISOString();
+
+      await supabase
+        .from("user_sessions")
+        .update({ ended_at: nowIso })
+        .eq("id", session_id);
     }
 
     async function forceLogout() {
@@ -179,24 +226,42 @@ export default function SessionTracker() {
           .eq("id", session_id);
       }
 
+      localStorage.removeItem(LS_KEY);
       await supabase.auth.signOut();
       navigate("/login", { replace: true });
     }
 
-    start();
-
-    const onBeforeUnload = async () => {
-      const session_id = sessionIdRef.current;
-      if (!session_id) return;
-      await supabase
-        .from("user_sessions")
-        .update({ ended_at: new Date().toISOString() })
-        .eq("id", session_id);
+    // ✅ cuando se va a background, best-effort
+    const onVisibility = async () => {
+      if (document.visibilityState === "hidden") {
+        try {
+          await flush(Date.now());
+          await endSessionBestEffort();
+        } catch {
+          // ignore
+        }
+      }
     };
+
+    // ✅ al cerrar pestaña, best-effort
+    const onBeforeUnload = async () => {
+      try {
+        await flush(Date.now());
+        await endSessionBestEffort();
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", onBeforeUnload);
 
+    start();
+
     return () => {
+      stopped = true;
       if (tickInterval) clearInterval(tickInterval);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [navigate]);

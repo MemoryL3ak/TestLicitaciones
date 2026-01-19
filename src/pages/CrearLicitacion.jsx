@@ -494,7 +494,7 @@ const REGIONES_CHILE = {
     "Chonchi",
     "Curaco de Vélez",
     "Dalcahue",
-    "Puqueldón",
+    "Pupueldón",
     "Queilén",
     "Quellón",
     "Quemchi",
@@ -621,6 +621,10 @@ export default function CrearLicitacion() {
   const [perfilNombre, setPerfilNombre] = useState("");
   const [perfilEmail, setPerfilEmail] = useState("");
   const [perfilCelular, setPerfilCelular] = useState("");
+
+  // ✅ NUEVO: estados para mostrar generación PDF / evitar doble click
+  const [guardando, setGuardando] = useState(false);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -1121,10 +1125,9 @@ export default function CrearLicitacion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignPrices, productos]);
 
-  const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-  const totalConIVA = total;
-  const totalNeto = Math.round(totalConIVA / 1.19);
-  const totalIVA = totalConIVA - totalNeto;
+  const totalNeto = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
+  const totalIVA = Math.round(totalNeto * 0.19);
+  const totalConIVA = totalNeto + totalIVA;
 
   // ✅ monto numérico desde string con puntos
   const montoNum = parseMontoCL(monto);
@@ -1213,9 +1216,13 @@ export default function CrearLicitacion() {
      GUARDAR LICITACIÓN
      ✅ guarda created_by y persiste vendedor_nombre/celular/correo en la tabla licitaciones
      ✅ SKU null si viene vacío
+     ✅ NUEVO: muestra overlay al generar PDF
+     ✅ NUEVO: no permite ID Licitación duplicado
   ============================================================ */
   async function guardarLicitacion() {
     setToast(null);
+
+    if (guardando || generandoPDF) return;
 
     if (!puedeCrearLicitacion) {
       setToast({
@@ -1260,113 +1267,146 @@ export default function CrearLicitacion() {
     const vendedorCorreoFinal = (user.email || perfilEmail || "").toString().trim();
     const vendedorCelularFinal = (perfilCelular || "").toString().trim();
 
+    setGuardando(true);
+
     try {
-      await crearClienteSiNoExiste();
-    } catch (e) {
-      setToast({
-        type: "error",
-        message: "Error al guardar el cliente asociado.",
-      });
-      return;
-    }
+      // ✅ NUEVO: validar duplicado por ID Licitación
+      const idLicitacionNorm = (idLicitacionInput || "").toString().trim();
+      const { data: dup, error: errDup } = await supabase
+        .from("licitaciones")
+        .select("id")
+        .eq("id_licitacion", idLicitacionNorm)
+        .limit(1);
 
-    const { data: lic, error } = await supabase
-      .from("licitaciones")
-      .insert([
-        {
-          id_licitacion: idLicitacionInput,
-          nombre,
-          fecha_hora_cierre: fechaHoraCierre,
-          monto: parseMontoCL(monto), // ✅ guarda numérico real
-          lista_precios: Number(listado),
+      if (errDup) {
+        console.error(errDup);
+        setToast({
+          type: "error",
+          message: "No se pudo validar el ID de licitación.",
+        });
+        return;
+      }
 
-          rut_entidad: rutEntidad,
-          nombre_entidad: nombreEntidad,
-          departamento,
-          municipalidad,
-          direccion,
-          tipo_compra: tipoCompra,
-          region,
-          comuna,
-          contacto,
-          email,
-          telefono,
-          condicion_venta: condVenta,
+      if (dup && dup.length > 0) {
+        setToast({
+          type: "error",
+          message:
+            `Ya existe una licitación con el ID "${idLicitacionNorm}".\n` +
+            "No se puede guardar nuevamente con el mismo ID Licitación.",
+        });
+        return;
+      }
 
-          fecha: fechaHoy,
-          creado_por: user.email,
-          estado: "En espera",
-          flete_estimado: Number(fleteEstimado),
-          total_con_iva: totalConIVA,
-          total_sin_iva: totalNeto,
-          total_iva: totalIVA,
+      try {
+        await crearClienteSiNoExiste();
+      } catch (e) {
+        setToast({
+          type: "error",
+          message: "Error al guardar el cliente asociado.",
+        });
+        return;
+      }
 
-          observaciones: observaciones || null,
+      const { data: lic, error } = await supabase
+        .from("licitaciones")
+        .insert([
+          {
+            id_licitacion: idLicitacionInput,
+            nombre,
+            fecha_hora_cierre: fechaHoraCierre,
+            monto: parseMontoCL(monto), // ✅ guarda numérico real
+            lista_precios: Number(listado),
 
-          // ✅ NUEVO: persistencia para edición/export
-          created_by: user.id,
-          vendedor_nombre: vendedorNombreFinal || null,
-          vendedor_celular: vendedorCelularFinal || null,
-          vendedor_correo: vendedorCorreoFinal || null,
-        },
-      ])
-      .select("id")
-      .single();
+            rut_entidad: rutEntidad,
+            nombre_entidad: nombreEntidad,
+            departamento,
+            municipalidad,
+            direccion,
+            tipo_compra: tipoCompra,
+            region,
+            comuna,
+            contacto,
+            email,
+            telefono,
+            condicion_venta: condVenta,
 
-    if (error) {
-      console.error(error);
-      setToast({ type: "error", message: "Error al guardar licitación" });
-      return;
-    }
+            fecha: fechaHoy,
+            creado_por: user.email,
+            estado: "En espera",
+            flete_estimado: Number(fleteEstimado),
+            total_con_iva: totalConIVA,
+            total_sin_iva: totalNeto,
+            total_iva: totalIVA,
 
-    const idLicitacion = lic.id;
+            observaciones: observaciones || null,
 
-    for (const it of items) {
-      const skuLimpio = String(it.sku || "").trim();
+            // ✅ NUEVO: persistencia para edición/export
+            created_by: user.id,
+            vendedor_nombre: vendedorNombreFinal || null,
+            vendedor_celular: vendedorCelularFinal || null,
+            vendedor_correo: vendedorCorreoFinal || null,
+          },
+        ])
+        .select("id")
+        .single();
 
-      await supabase.from("items_licitacion").insert([
-        {
-          licitacion_id: idLicitacion,
-          producto: it.producto,
-          formato: it.formato,
-          cantidad: Number(it.cantidad),
-          // ✅ unitario final (incluye flete)
-          valor_unitario: Number(it.precio) + fletePorUnidad,
-          sku: skuLimpio ? skuLimpio : null,
-          total: Number(it.total),
-          categoria: it.categoria,
-          observacion: it.observacion,
-        },
-      ]);
-    }
+      if (error) {
+        console.error(error);
+        setToast({ type: "error", message: "Error al guardar licitación" });
+        return;
+      }
 
-    await generarPDFcotizacion({
-      numero_licitacion: idLicitacion,
-      id_licitacion: idLicitacionInput,
-      fecha_emision: fechaHoy,
+      const idLicitacion = lic.id;
 
-      // ✅ consistente con lo guardado en BD
-      vendedor_nombre: vendedorNombreFinal,
-      vendedor_correo: vendedorCorreoFinal,
-      vendedor_celular: vendedorCelularFinal,
+      for (const it of items) {
+        const skuLimpio = String(it.sku || "").trim();
 
-      nombre_entidad: nombreEntidad,
-      rut_entidad: rutEntidad,
-      direccion,
-      comuna,
-      contacto,
-      email,
-      telefono,
-      condicion_venta: condVenta,
+        await supabase.from("items_licitacion").insert([
+          {
+            licitacion_id: idLicitacion,
+            producto: it.producto,
+            formato: it.formato,
+            cantidad: Number(it.cantidad),
+            // ✅ unitario final (incluye flete)
+            valor_unitario: Number(it.precio) + fletePorUnidad,
+            sku: skuLimpio ? skuLimpio : null,
+            total: Number(it.total),
+            categoria: it.categoria,
+            observacion: it.observacion,
+          },
+        ]);
+      }
 
-      observaciones: (observaciones ?? "").toString(),
+      // ✅ NUEVO: mostrar overlay durante generación PDF
+      setGenerandoPDF(true);
 
-      items_tabla: items
-        .map((it, idx) => {
-          const skuTxt = String(it.sku || "").trim();
-          const unitario = Number(it.precio) + fletePorUnidad;
+      await generarPDFcotizacion({
+        numero_licitacion: idLicitacion,
+        id_licitacion: idLicitacionInput,
+        fecha_emision: fechaHoy,
 
-          const fila = `
+        // ✅ consistente con lo guardado en BD
+        vendedor_nombre: vendedorNombreFinal,
+        vendedor_correo: vendedorCorreoFinal,
+        vendedor_celular: vendedorCelularFinal,
+
+        nombre_entidad: nombreEntidad,
+        rut_entidad: rutEntidad,
+        direccion,
+        comuna,
+        contacto,
+        email,
+        telefono,
+        condicion_venta: condVenta,
+
+        observaciones: (observaciones ?? "").toString(),
+
+        items_tabla: items
+          .map((it, idx) => {
+            const skuTxt = String(it.sku || "").trim();
+            const unitario = Number(it.precio) + fletePorUnidad;
+
+            const fila = `
             <tr>
               <td style="text-align:center; font-weight:bold;">${idx + 1}</td>
               <td>${skuTxt}</td>
@@ -1378,8 +1418,8 @@ export default function CrearLicitacion() {
             </tr>
           `;
 
-          const filaObs = it.observacion
-            ? `
+            const filaObs = it.observacion
+              ? `
             <tr>
               <td></td>
               <td></td>
@@ -1387,24 +1427,28 @@ export default function CrearLicitacion() {
                 Observación: ${it.observacion}
               </td>
             </tr>`
-            : "";
+              : "";
 
-          return fila + filaObs;
-        })
-        .join(""),
+            return fila + filaObs;
+          })
+          .join(""),
 
-      afecto: formatear(totalNeto),
-      iva: formatear(totalIVA),
-      total_con_iva: formatear(totalConIVA),
-    });
+        afecto: formatear(totalNeto),
+        iva: formatear(totalIVA),
+        total_con_iva: formatear(totalConIVA),
+      });
 
-    setToast({
-      type: "success",
-      message: `La licitación "${nombre}" fue creada correctamente.`,
-    });
+      setToast({
+        type: "success",
+        message: `La licitación "${nombre}" fue creada correctamente.`,
+      });
 
-    localStorage.removeItem(STORAGE_KEY);
-    limpiarDatos();
+      localStorage.removeItem(STORAGE_KEY);
+      limpiarDatos();
+    } finally {
+      setGenerandoPDF(false);
+      setGuardando(false);
+    }
   }
 
   /* ============================================================
@@ -1468,6 +1512,23 @@ export default function CrearLicitacion() {
 
   return (
     <div className="w-full max-w-none mx-auto p-8">
+      {/* ✅ NUEVO: Overlay durante guardado / generación de PDF */}
+      {(guardando || generandoPDF) && (
+        <div className="fixed inset-0 z-[99999] bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-[360px] text-center">
+            <div className="text-lg font-semibold text-gray-900">
+              {generandoPDF ? "Generando PDF…" : "Guardando licitación…"}
+            </div>
+            <div className="text-sm text-gray-600 mt-2">
+              Por favor no cierres ni recargues la página.
+            </div>
+            <div className="mt-4 animate-pulse text-gray-500 text-sm">
+              Procesando…
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tooltip Animado Azul */}
       {tooltip.visible && (
         <div
@@ -2122,7 +2183,10 @@ export default function CrearLicitacion() {
 
         <button
           onClick={guardarLicitacion}
-          className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
+          disabled={guardando || generandoPDF}
+          className={`cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 ${
+            guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : ""
+          }`}
         >
           Guardar Licitación
         </button>

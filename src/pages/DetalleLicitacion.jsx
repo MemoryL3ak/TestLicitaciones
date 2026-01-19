@@ -622,6 +622,10 @@ export default function EditarLicitacion() {
   const [loading, setLoading] = useState(true);
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
+  // ✅ NUEVO: estados para mostrar generación PDF / evitar doble click
+  const [guardando, setGuardando] = useState(false);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
+
   const STORAGE_KEY = `${STORAGE_KEY_PREFIX}${id}`;
 
   /* ===============================
@@ -1411,10 +1415,9 @@ export default function EditarLicitacion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fletePorUnidad, hydrated]);
 
-  const total = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-  const totalConIVA = total;
-  const totalNeto = Math.round(totalConIVA / 1.19);
-  const totalIVA = totalConIVA - totalNeto;
+  const totalNeto = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
+  const totalIVA = Math.round(totalNeto * 0.19);
+  const totalConIVA = totalNeto + totalIVA;
 
   let porcentajePresupuesto = 0;
   if (Number(monto) > 0) {
@@ -1581,31 +1584,37 @@ export default function EditarLicitacion() {
   /* ============================================================
      EXPORTAR PDF
      ✅ pasa: id_licitacion + vendedor_* + número de ítem
+     ✅ NUEVO: overlay "Generando PDF…" y bloqueo
   ============================================================ */
- async function exportarPDF() {
-  setToast(null);
-  const fechaHoy = new Date().toISOString().slice(0, 10);
+  async function exportarPDF() {
+    if (guardando || generandoPDF) return;
 
-  const ITEMS_POR_PAGINA = 23;
+    setToast(null);
+    setGenerandoPDF(true);
 
-  const chunk = (arr, size) => {
-    const out = [];
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-    return out;
-  };
+    try {
+      const fechaHoy = new Date().toISOString().slice(0, 10);
 
-  const partes = chunk(items, ITEMS_POR_PAGINA);
+      const ITEMS_POR_PAGINA = 23;
 
-  const pages = partes.map((itemsPagina, pageIndex) => {
-    const baseIndex = pageIndex * ITEMS_POR_PAGINA;
+      const chunk = (arr, size) => {
+        const out = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
 
-    const items_tabla = itemsPagina
-      .map((it, idx) => {
-        const nro = baseIndex + idx + 1; // ✅ numeración global
-        const skuTxt = String(it.sku || "").trim();
-        const unitario = Number(it.precio || 0) + fletePorUnidad;
+      const partes = chunk(items, ITEMS_POR_PAGINA);
 
-        const fila = `
+      const pages = partes.map((itemsPagina, pageIndex) => {
+        const baseIndex = pageIndex * ITEMS_POR_PAGINA;
+
+        const items_tabla = itemsPagina
+          .map((it, idx) => {
+            const nro = baseIndex + idx + 1; // ✅ numeración global
+            const skuTxt = String(it.sku || "").trim();
+            const unitario = Number(it.precio || 0) + fletePorUnidad;
+
+            const fila = `
           <tr>
             <td>${nro}</td>
             <td>${skuTxt}</td>
@@ -1617,8 +1626,8 @@ export default function EditarLicitacion() {
           </tr>
         `;
 
-        const filaObs = it.observacion
-          ? `
+            const filaObs = it.observacion
+              ? `
           <tr>
             <td></td>
             <td></td>
@@ -1626,82 +1635,68 @@ export default function EditarLicitacion() {
               Observación: ${it.observacion}
             </td>
           </tr>`
-          : "";
+              : "";
 
-        return fila + filaObs;
-      })
-      .join("");
+            return fila + filaObs;
+          })
+          .join("");
 
-    return {
-      items_tabla,
-      // (no lo usamos directamente, pero lo dejo por claridad)
-      showBottom: pageIndex === partes.length - 1,
-    };
-  });
+        return {
+          items_tabla,
+          showBottom: pageIndex === partes.length - 1,
+        };
+      });
 
-  const vendedor_nombre = (vendedorNombre || "").toString();
-  const vendedor_celular = (vendedorCelular || "").toString();
-  const vendedor_correo = (vendedorCorreo || "").toString();
+      const vendedor_nombre = (vendedorNombre || "").toString();
+      const vendedor_celular = (vendedorCelular || "").toString();
+      const vendedor_correo = (vendedorCorreo || "").toString();
 
-  await generarPDFcotizacion({
-    numero_licitacion: id,
-    id_licitacion: idLicitacionInput,
-    fecha_emision: fechaHoy,
+      await generarPDFcotizacion({
+        numero_licitacion: id,
+        id_licitacion: idLicitacionInput,
+        fecha_emision: fechaHoy,
 
-    nombre_entidad: nombreEntidad,
-    rut_entidad: rutEntidad,
-    direccion,
-    comuna,
-    contacto,
-    email,
-    telefono,
-    condicion_venta: condVenta,
+        nombre_entidad: nombreEntidad,
+        rut_entidad: rutEntidad,
+        direccion,
+        comuna,
+        contacto,
+        email,
+        telefono,
+        condicion_venta: condVenta,
 
-    vendedor_nombre,
-    vendedor_celular,
-    vendedor_correo,
-    vendedor_ccorreo: vendedor_correo,
+        vendedor_nombre,
+        vendedor_celular,
+        vendedor_correo,
+        vendedor_ccorreo: vendedor_correo,
 
-    observaciones: (observaciones ?? "").toString(),
+        observaciones: (observaciones ?? "").toString(),
 
-    // ✅ acá va la magia
-    pages,
+        pages,
 
-    afecto: formatear(totalNeto),
-    iva: formatear(totalIVA),
-    total_con_iva: formatear(totalConIVA),
-  });
+        afecto: formatear(totalNeto),
+        iva: formatear(totalIVA),
+        total_con_iva: formatear(totalConIVA),
+      });
 
-  setToast({ type: "success", message: "PDF generado correctamente." });
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      setToast({ type: "success", message: "PDF generado correctamente." });
+    } finally {
+      setGenerandoPDF(false);
+    }
+  }
 
   /* ============================================================
      GUARDAR CAMBIOS
      ✅ SKU opcional
      ✅ Municipalidad/Contacto/Email/Teléfono NO obligatorios
      ✅ guarda observaciones
+     ✅ NUEVO: bloqueo de duplicidad ID Licitación (excluye esta licitación)
+     ✅ NUEVO: overlay "Guardando licitación…" y bloqueo
      (vendedor_* NO se toca aquí para evitar errores si no existen columnas)
   ============================================================ */
   async function guardarCambios() {
+    if (guardando || generandoPDF) return false;
+
     setToast(null);
 
     const errores = [];
@@ -1724,150 +1719,185 @@ export default function EditarLicitacion() {
       return false;
     }
 
+    setGuardando(true);
+
     try {
-      await crearClienteSiNoExiste();
-    } catch (e) {
-      setToast({
-        type: "error",
-        message: "Error al guardar el cliente asociado.",
-      });
-      return false;
-    }
+      // ✅ NUEVO: validar duplicado por ID Licitación (excluye esta licitación)
+      const idLicitacionNorm = (idLicitacionInput || "").toString().trim();
 
-    const { error: errUpdate } = await supabase
-      .from("licitaciones")
-      .update({
-        id_licitacion: idLicitacionInput,
-        nombre,
-        fecha_hora_cierre: fechaHoraCierre,
-        monto: Number(monto),
-        lista_precios: Number(listado),
+      const { data: dup, error: errDup } = await supabase
+        .from("licitaciones")
+        .select("id")
+        .eq("id_licitacion", idLicitacionNorm)
+        .neq("id", id)
+        .limit(1);
 
-        rut_entidad: rutEntidad,
-        nombre_entidad: nombreEntidad,
-        departamento,
-        municipalidad,
-        direccion,
-        tipo_compra: tipoCompra,
-        region,
-        comuna,
-        contacto,
-        email,
-        telefono,
-        condicion_venta: condVenta,
-
-        estado,
-        flete_estimado: Number(fleteEstimado),
-
-        total_con_iva: totalConIVA,
-        total_sin_iva: totalNeto,
-        total_iva: totalIVA,
-
-        observaciones: observaciones || null,
-      })
-      .eq("id", id);
-
-    if (errUpdate) {
-      console.error(errUpdate);
-      setToast({ type: "error", message: "Error al guardar licitación" });
-      return false;
-    }
-
-    // 1) Filtrar filas completamente vacías
-    const itemsParaGuardar = (items || []).filter((it) => {
-      const sku = (it?.sku ?? "").trim();
-      const producto = (it?.producto ?? "").trim();
-      const formato = (it?.formato ?? "").trim();
-      const categoria = (it?.categoria ?? "").trim();
-      const obs = (it?.observacion ?? "").trim();
-      const cantidad = Number(it?.cantidad ?? 0);
-      const precio = Number(it?.precio ?? 0);
-
-      const tieneAlgo =
-        sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
-
-      return tieneAlgo;
-    });
-
-    // 2) Validar: SKU YA NO es obligatorio
-    for (let i = 0; i < itemsParaGuardar.length; i++) {
-      const it = itemsParaGuardar[i];
-
-      const producto = (it?.producto ?? "").trim();
-      const cantidad = Number(it?.cantidad ?? 0);
-
-      const faltan = [];
-      if (!producto) faltan.push("Producto");
-      if (!(cantidad > 0)) faltan.push("Cantidad");
-
-      if (faltan.length > 0) {
+      if (errDup) {
+        console.error(errDup);
         setToast({
           type: "error",
-          message: `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
+          message: "No se pudo validar el ID de licitación.",
         });
         return false;
       }
-    }
 
-    // 3) UPSERT (SKU opcional -> null)
-    for (const it of itemsParaGuardar) {
-      const skuLimpio = String(it?.sku ?? "").trim();
+      if (dup && dup.length > 0) {
+        setToast({
+          type: "error",
+          message:
+            `Ya existe una licitación con el ID "${idLicitacionNorm}".\n` +
+            "No se puede guardar nuevamente con el mismo ID Licitación.",
+        });
+        return false;
+      }
 
-      const payload = {
-        licitacion_id: id,
-        producto: String(it?.producto ?? ""),
-        formato: String(it?.formato ?? ""),
-        cantidad: Number(it?.cantidad ?? 0),
-        valor_unitario: Number(it?.precio ?? 0) + fletePorUnidad,
-        sku: skuLimpio ? skuLimpio : null,
-        total: Number(it?.total ?? 0),
-        categoria: String(it?.categoria ?? ""),
-        observacion: String(it?.observacion ?? ""),
-      };
+      try {
+        await crearClienteSiNoExiste();
+      } catch (e) {
+        setToast({
+          type: "error",
+          message: "Error al guardar el cliente asociado.",
+        });
+        return false;
+      }
 
-      if (it.id_item) {
-        const { error: eUpd } = await supabase
-          .from("items_licitacion")
-          .update(payload)
-          .eq("id", it.id_item);
+      const { error: errUpdate } = await supabase
+        .from("licitaciones")
+        .update({
+          id_licitacion: idLicitacionInput,
+          nombre,
+          fecha_hora_cierre: fechaHoraCierre,
+          monto: Number(monto),
+          lista_precios: Number(listado),
 
-        if (eUpd) {
-          console.error(eUpd);
-          setToast({ type: "error", message: "Error al guardar un ítem" });
+          rut_entidad: rutEntidad,
+          nombre_entidad: nombreEntidad,
+          departamento,
+          municipalidad,
+          direccion,
+          tipo_compra: tipoCompra,
+          region,
+          comuna,
+          contacto,
+          email,
+          telefono,
+          condicion_venta: condVenta,
+
+          estado,
+          flete_estimado: Number(fleteEstimado),
+
+          total_con_iva: totalConIVA,
+          total_sin_iva: totalNeto,
+          total_iva: totalIVA,
+
+          observaciones: observaciones || null,
+        })
+        .eq("id", id);
+
+      if (errUpdate) {
+        console.error(errUpdate);
+        setToast({ type: "error", message: "Error al guardar licitación" });
+        return false;
+      }
+
+      // 1) Filtrar filas completamente vacías
+      const itemsParaGuardar = (items || []).filter((it) => {
+        const sku = (it?.sku ?? "").trim();
+        const producto = (it?.producto ?? "").trim();
+        const formato = (it?.formato ?? "").trim();
+        const categoria = (it?.categoria ?? "").trim();
+        const obs = (it?.observacion ?? "").trim();
+        const cantidad = Number(it?.cantidad ?? 0);
+        const precio = Number(it?.precio ?? 0);
+
+        const tieneAlgo =
+          sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
+
+        return tieneAlgo;
+      });
+
+      // 2) Validar: SKU YA NO es obligatorio
+      for (let i = 0; i < itemsParaGuardar.length; i++) {
+        const it = itemsParaGuardar[i];
+
+        const producto = (it?.producto ?? "").trim();
+        const cantidad = Number(it?.cantidad ?? 0);
+
+        const faltan = [];
+        if (!producto) faltan.push("Producto");
+        if (!(cantidad > 0)) faltan.push("Cantidad");
+
+        if (faltan.length > 0) {
+          setToast({
+            type: "error",
+            message: `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
+          });
           return false;
-        }
-      } else {
-        const { data: ins, error: eIns } = await supabase
-          .from("items_licitacion")
-          .insert([payload])
-          .select("id")
-          .single();
-
-        if (eIns) {
-          console.error(eIns);
-          setToast({ type: "error", message: "Error al insertar un ítem" });
-          return false;
-        }
-
-        if (ins?.id) {
-          setItems((prev) =>
-            prev.map((x) => (x.uid === it.uid ? { ...x, id_item: ins.id } : x))
-          );
         }
       }
+
+      // 3) UPSERT (SKU opcional -> null)
+      for (const it of itemsParaGuardar) {
+        const skuLimpio = String(it?.sku ?? "").trim();
+
+        const payload = {
+          licitacion_id: id,
+          producto: String(it?.producto ?? ""),
+          formato: String(it?.formato ?? ""),
+          cantidad: Number(it?.cantidad ?? 0),
+          valor_unitario: Number(it?.precio ?? 0) + fletePorUnidad,
+          sku: skuLimpio ? skuLimpio : null,
+          total: Number(it?.total ?? 0),
+          categoria: String(it?.categoria ?? ""),
+          observacion: String(it?.observacion ?? ""),
+        };
+
+        if (it.id_item) {
+          const { error: eUpd } = await supabase
+            .from("items_licitacion")
+            .update(payload)
+            .eq("id", it.id_item);
+
+          if (eUpd) {
+            console.error(eUpd);
+            setToast({ type: "error", message: "Error al guardar un ítem" });
+            return false;
+          }
+        } else {
+          const { data: ins, error: eIns } = await supabase
+            .from("items_licitacion")
+            .insert([payload])
+            .select("id")
+            .single();
+
+          if (eIns) {
+            console.error(eIns);
+            setToast({ type: "error", message: "Error al insertar un ítem" });
+            return false;
+          }
+
+          if (ins?.id) {
+            setItems((prev) =>
+              prev.map((x) => (x.uid === it.uid ? { ...x, id_item: ins.id } : x))
+            );
+          }
+        }
+      }
+
+      setToast({
+        type: "success",
+        message: `La licitación "${nombre}" fue actualizada correctamente.`,
+      });
+
+      localStorage.removeItem(STORAGE_KEY);
+
+      baselineRef.current = buildSnapshot();
+      setIsDirty(false);
+
+      return true;
+    } finally {
+      setGuardando(false);
     }
-
-    setToast({
-      type: "success",
-      message: `La licitación "${nombre}" fue actualizada correctamente.`,
-    });
-
-    localStorage.removeItem(STORAGE_KEY);
-
-    baselineRef.current = buildSnapshot();
-    setIsDirty(false);
-
-    return true;
   }
 
   /* ============================================================
@@ -1879,6 +1909,23 @@ export default function EditarLicitacion() {
 
   return (
     <div className="w-full max-w-none mx-auto p-8">
+      {/* ✅ NUEVO: Overlay durante guardado / generación de PDF */}
+      {(guardando || generandoPDF) && (
+        <div className="fixed inset-0 z-[99999] bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-[360px] text-center">
+            <div className="text-lg font-semibold text-gray-900">
+              {generandoPDF ? "Generando PDF…" : "Guardando licitación…"}
+            </div>
+            <div className="text-sm text-gray-600 mt-2">
+              Por favor no cierres ni recargues la página.
+            </div>
+            <div className="mt-4 animate-pulse text-gray-500 text-sm">
+              Procesando…
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tooltip */}
       {tooltip.visible && (
         <div
@@ -2043,6 +2090,7 @@ export default function EditarLicitacion() {
         <button
           className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
           onClick={() => setMostrarEntidad(!mostrarEntidad)}
+          type="button"
         >
           {mostrarEntidad ? "Ocultar ▲" : "Mostrar ▼"}
         </button>
@@ -2343,7 +2391,9 @@ export default function EditarLicitacion() {
                                   )
                                 )
                           }
-                          onChange={(e) => actualizarPrecioUnitario(index, e.target.value)}
+                          onChange={(e) =>
+                            actualizarPrecioUnitario(index, e.target.value)
+                          }
                         />
                       </div>
 
@@ -2503,7 +2553,9 @@ export default function EditarLicitacion() {
             <div
               className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
             >
-              {porcentajePresupuesto > 0 ? porcentajePresupuesto.toFixed(2) + "%" : "0%"}
+              {porcentajePresupuesto > 0
+                ? porcentajePresupuesto.toFixed(2) + "%"
+                : "0%"}
             </div>
           </div>
         </div>
@@ -2531,22 +2583,29 @@ export default function EditarLicitacion() {
           onClick={agregarItem}
           className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700"
           type="button"
+          disabled={guardando || generandoPDF}
         >
           + Agregar Ítem
         </button>
 
         <button
           onClick={guardarCambios}
-          className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700"
+          className={`cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 ${
+            guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : ""
+          }`}
           type="button"
+          disabled={guardando || generandoPDF}
         >
           Guardar Cambios
         </button>
 
         <button
           onClick={exportarPDF}
-          className="cursor-pointer bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897]"
+          className={`cursor-pointer bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
+            guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : ""
+          }`}
           type="button"
+          disabled={guardando || generandoPDF}
         >
           Generar PDF
         </button>

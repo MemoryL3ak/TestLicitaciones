@@ -4,6 +4,12 @@
 // ✅ Además: cuando está bloqueado, los campos se ven GRIS (disabled styles)
 // ✅ Drag & drop / ítems / flete / observaciones / entidad / licitación: bloqueados si no está "En espera"
 
+// ✅ FIX ORDEN:
+// - items_licitacion YA tiene columna `orden` (según tu screenshot)
+// - CARGA desde BD: .order("orden").order("id")
+// - GUARDAR: escribe `orden` (idx+1) en cada ítem
+// - DRAG: persiste el reorder al tiro en localStorage (no esperar al useEffect)
+
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
@@ -587,7 +593,11 @@ function SortableItem({ itemId, children, disabled }) {
   return (
     <div ref={setNodeRef} style={style}>
       {children({
-        dragHandleProps: { ...attributes, ...listeners, ref: setActivatorNodeRef },
+        dragHandleProps: {
+          ...attributes,
+          ...listeners,
+          ref: setActivatorNodeRef,
+        },
         isDragging,
       })}
     </div>
@@ -684,6 +694,7 @@ export default function EditarLicitacion() {
     {
       uid: generarUid(),
       id_item: null,
+      orden: null,
       sku: "",
       producto: "",
       categoria: "",
@@ -719,6 +730,18 @@ export default function EditarLicitacion() {
     "disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200";
 
   const btnDisabled = "opacity-50 cursor-not-allowed pointer-events-none";
+
+  /* ============================================================
+     ✅ Persistir items inmediatamente (para evitar perder orden si cae la página)
+============================================================ */
+  function persistirDraftItems(nextItems) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const draft = raw ? JSON.parse(raw) : {};
+      draft.items = nextItems;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch {}
+  }
 
   /* ============================================================
      Cliente helpers
@@ -818,6 +841,7 @@ export default function EditarLicitacion() {
     return {
       uid: generarUid(),
       id_item: null,
+      orden: null,
       sku: "",
       producto: "",
       categoria: "",
@@ -875,6 +899,7 @@ export default function EditarLicitacion() {
           ? cargados.map((it) => ({
               uid: it.uid || generarUid(),
               id_item: it.id_item ?? null,
+              orden: it.orden ?? null,
               sku: it.sku || "",
               producto: it.producto || "",
               categoria: it.categoria || "",
@@ -989,8 +1014,11 @@ export default function EditarLicitacion() {
       vendedorCelular: vendedorCelular || "",
       vendedorCorreo: vendedorCorreo || "",
 
+      // el orden queda implícito por el orden del arreglo
       items: (items || []).map((it) => ({
         uid: it.uid,
+        id_item: it.id_item ?? null,
+        orden: it.orden ?? null,
         sku: it.sku || "",
         producto: it.producto || "",
         categoria: it.categoria || "",
@@ -1072,10 +1100,13 @@ export default function EditarLicitacion() {
       return;
     }
 
+    // ✅ ORDER FIX
     const { data: itemsDB } = await supabase
       .from("items_licitacion")
       .select("*")
-      .eq("licitacion_id", id);
+      .eq("licitacion_id", id)
+      .order("orden", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: true });
 
     setIdLicitacionInput(lic.id_licitacion || "");
     setNombre(lic.nombre || "");
@@ -1123,6 +1154,7 @@ export default function EditarLicitacion() {
         return {
           uid: generarUid(),
           id_item: i.id,
+          orden: i.orden ?? null,
           sku: i.sku || "",
           producto: i.producto || "",
           categoria: i.categoria || "",
@@ -1263,10 +1295,13 @@ export default function EditarLicitacion() {
         return;
       }
 
+      // ✅ ORDER FIX
       const { data: itemsDB } = await supabase
         .from("items_licitacion")
         .select("*")
-        .eq("licitacion_id", id);
+        .eq("licitacion_id", id)
+        .order("orden", { ascending: true, nullsFirst: false })
+        .order("id", { ascending: true });
 
       setIdLicitacionInput(lic.id_licitacion || "");
       setNombre(lic.nombre || "");
@@ -1314,6 +1349,7 @@ export default function EditarLicitacion() {
           return {
             uid: generarUid(),
             id_item: i.id,
+            orden: i.orden ?? null,
             sku: i.sku || "",
             producto: i.producto || "",
             categoria: i.categoria || "",
@@ -1566,6 +1602,8 @@ export default function EditarLicitacion() {
 
   /* ============================================================
      DRAG & DROP (bloqueado si no editable)
+     ✅ FIX: usar prev dentro del setItems (evita stale items)
+     ✅ FIX: persistir reorder al tiro en localStorage
 ============================================================ */
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1579,13 +1617,20 @@ export default function EditarLicitacion() {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      const oldIndex = items.findIndex((it) => it.uid === active.id);
-      const newIndex = items.findIndex((it) => it.uid === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
+      setItems((prev) => {
+        const oldIndex = prev.findIndex((it) => it.uid === active.id);
+        const newIndex = prev.findIndex((it) => it.uid === over.id);
+        if (oldIndex === -1 || newIndex === -1) return prev;
 
-      setItems((prev) => arrayMove(prev, oldIndex, newIndex));
+        const next = arrayMove(prev, oldIndex, newIndex);
+
+        // ✅ persistencia inmediata del orden en draft
+        persistirDraftItems(next);
+
+        return next;
+      });
     },
-    [items, esEditable]
+    [esEditable] // STORAGE_KEY ya lo usa persistirDraftItems (closure del componente)
   );
 
   /* ============================================================
@@ -1692,6 +1737,7 @@ export default function EditarLicitacion() {
      GUARDAR CAMBIOS
      - Guardar siempre permitido (para cambiar estado)
      - Si NO es editable: NO upsertea items (seguridad extra)
+     ✅ FIX: escribir `orden` (idx+1) en items_licitacion
 ============================================================ */
   async function guardarCambios() {
     if (guardando || generandoPDF) return false;
@@ -1842,12 +1888,14 @@ export default function EditarLicitacion() {
         }
       }
 
-      // 3) UPSERT
-      for (const it of itemsParaGuardar) {
+      // 3) UPSERT (update/insert) + ✅ ORDEN
+      for (let idx = 0; idx < itemsParaGuardar.length; idx++) {
+        const it = itemsParaGuardar[idx];
         const skuLimpio = String(it?.sku ?? "").trim();
 
         const payload = {
           licitacion_id: id,
+          orden: idx + 1, // ✅ orden persistido
           producto: String(it?.producto ?? ""),
           formato: String(it?.formato ?? ""),
           cantidad: Number(it?.cantidad ?? 0),
@@ -1884,7 +1932,11 @@ export default function EditarLicitacion() {
 
           if (ins?.id) {
             setItems((prev) =>
-              prev.map((x) => (x.uid === it.uid ? { ...x, id_item: ins.id } : x))
+              prev.map((x) =>
+                x.uid === it.uid
+                  ? { ...x, id_item: ins.id, orden: payload.orden }
+                  : x
+              )
             );
           }
         }
@@ -1981,8 +2033,8 @@ export default function EditarLicitacion() {
       {/* Aviso bloqueo */}
       {!esEditable && (
         <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
-          Esta licitación está en estado <b>{estado}</b>. Los campos están bloqueados.
-          Para editar, cambia el estado a <b>En espera</b>.
+          Esta licitación está en estado <b>{estado}</b>. Los campos están
+          bloqueados. Para editar, cambia el estado a <b>En espera</b>.
         </div>
       )}
 
@@ -2105,7 +2157,9 @@ export default function EditarLicitacion() {
 
       {/* DATOS ENTIDAD */}
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-semibold text-gray-800">Datos de la Entidad</h2>
+        <h2 className="text-xl font-semibold text-gray-800">
+          Datos de la Entidad
+        </h2>
 
         <button
           className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
@@ -2454,7 +2508,9 @@ export default function EditarLicitacion() {
                             onClick={() => toggleObservacion(index)}
                             disabled={!esEditable}
                             className={`bg-gray-300 rounded-md w-10 h-10 text-base shadow flex items-center justify-center ${
-                              esEditable ? "cursor-pointer hover:bg-gray-400" : btnDisabled
+                              esEditable
+                                ? "cursor-pointer hover:bg-gray-400"
+                                : btnDisabled
                             }`}
                             title="Observación"
                             type="button"
@@ -2467,7 +2523,9 @@ export default function EditarLicitacion() {
                               onClick={() => eliminarItem(index)}
                               disabled={!esEditable}
                               className={`bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow ${
-                                esEditable ? "cursor-pointer hover:bg-red-700" : btnDisabled
+                                esEditable
+                                  ? "cursor-pointer hover:bg-red-700"
+                                  : btnDisabled
                               }`}
                               type="button"
                             >
@@ -2501,7 +2559,9 @@ export default function EditarLicitacion() {
                         onClick={() => insertarItemDespues(index)}
                         disabled={!esEditable}
                         className={`bg-green-600 text-white rounded-md w-9 h-9 shadow flex items-center justify-center ${
-                          esEditable ? "cursor-pointer hover:bg-green-700" : btnDisabled
+                          esEditable
+                            ? "cursor-pointer hover:bg-green-700"
+                            : btnDisabled
                         }`}
                         title="Agregar ítem debajo"
                       >
@@ -2619,7 +2679,9 @@ export default function EditarLicitacion() {
 
       {/* OBSERVACIONES GENERALES */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Observaciones</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Observaciones
+        </h2>
 
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Observaciones generales
@@ -2639,7 +2701,9 @@ export default function EditarLicitacion() {
         <button
           onClick={agregarItem}
           className={`bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700 ${
-            (!esEditable || guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+            !esEditable || guardando || generandoPDF
+              ? btnDisabled
+              : "cursor-pointer"
           }`}
           type="button"
           disabled={!esEditable || guardando || generandoPDF}
@@ -2651,7 +2715,7 @@ export default function EditarLicitacion() {
         <button
           onClick={guardarCambios}
           className={`bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 ${
-            (guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+            guardando || generandoPDF ? btnDisabled : "cursor-pointer"
           }`}
           type="button"
           disabled={guardando || generandoPDF}
@@ -2662,7 +2726,7 @@ export default function EditarLicitacion() {
         <button
           onClick={exportarPDF}
           className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
-            (guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+            guardando || generandoPDF ? btnDisabled : "cursor-pointer"
           }`}
           type="button"
           disabled={guardando || generandoPDF}

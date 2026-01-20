@@ -158,7 +158,6 @@ const customStyles = {
     fontSize: "13px",
     fontFamily: "inherit",
   }),
-  // ✅ para que el menú no quede detrás de otros elementos
   menuPortal: (base) => ({ ...base, zIndex: 99999 }),
 };
 
@@ -494,7 +493,7 @@ const REGIONES_CHILE = {
     "Chonchi",
     "Curaco de Vélez",
     "Dalcahue",
-    "Pupueldón",
+    "Puqueldón", // ✅ (arreglé typo)
     "Queilén",
     "Quellón",
     "Quemchi",
@@ -549,8 +548,7 @@ const opcionesComuna = (regionSeleccionada) =>
 const STORAGE_KEY = "crear_licitacion_draft";
 
 function generarId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID)
-    return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -622,7 +620,7 @@ export default function CrearLicitacion() {
   const [perfilEmail, setPerfilEmail] = useState("");
   const [perfilCelular, setPerfilCelular] = useState("");
 
-  // ✅ NUEVO: estados para mostrar generación PDF / evitar doble click
+  // ✅ estados para mostrar generación PDF / evitar doble click
   const [guardando, setGuardando] = useState(false);
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
@@ -642,7 +640,6 @@ export default function CrearLicitacion() {
         return;
       }
 
-      // ✅ email viene de auth
       setPerfilEmail(user.email || "");
 
       const { data: perfil, error: perfilErr } = await supabase
@@ -676,7 +673,7 @@ export default function CrearLicitacion() {
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
   const [nombre, setNombre] = useState("");
   const [fechaHoraCierre, setFechaHoraCierre] = useState("");
-  const [monto, setMonto] = useState(""); // ✅ string formateado (ej: "1.234.567")
+  const [monto, setMonto] = useState(""); // string formateado "1.234.567"
   const [listado, setListado] = useState("1");
 
   const [rutEntidad, setRutEntidad] = useState("");
@@ -700,8 +697,20 @@ export default function CrearLicitacion() {
   const [items, setItems] = useState([crearItemVacio()]);
   const [hydrated, setHydrated] = useState(false);
 
-  // ✅ Observaciones generales (sección al final)
+  // ✅ Observaciones generales
   const [observaciones, setObservaciones] = useState("");
+
+  /* ============================================================
+     ✅ Persistir items inmediatamente (para no perder orden si se cae)
+============================================================ */
+  function persistirDraftItems(nextItems) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const draft = raw ? JSON.parse(raw) : {};
+      draft.items = nextItems;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch {}
+  }
 
   async function buscarClientePorRut(rut) {
     if (!rut) return;
@@ -741,7 +750,6 @@ export default function CrearLicitacion() {
       setNombre(data.nombre || "");
       setFechaHoraCierre(data.fechaHoraCierre || "");
 
-      // ✅ soporta borradores antiguos (monto numérico) y nuevos (string con puntos)
       const montoGuardado = data.monto ?? "";
       if (typeof montoGuardado === "number") {
         setMonto(Number(montoGuardado).toLocaleString("es-CL"));
@@ -793,7 +801,7 @@ export default function CrearLicitacion() {
       idLicitacionInput,
       nombre,
       fechaHoraCierre,
-      monto, // ✅ string formateado
+      monto,
       listado,
       rutEntidad,
       nombreEntidad,
@@ -924,14 +932,12 @@ export default function CrearLicitacion() {
       : 0;
 
   /* ============================================================
-     ✅ Precio Unitario editable (muestra unitario + flete)
-     ✅ AL EDITAR: se considera SOLO precio del producto (sin tocar flete)
+     Precio Unitario editable
   ============================================================ */
   function actualizarPrecioUnitario(index, valorStr) {
     const copia = [...items];
     const item = { ...copia[index] };
 
-    // ✅ lo que el usuario escribe ES EL PRECIO DEL PRODUCTO (sin flete)
     item.precioUnitarioStr = formatearCLDesdeString(valorStr);
     const baseSinFlete = parseMontoCL(item.precioUnitarioStr);
 
@@ -947,12 +953,10 @@ export default function CrearLicitacion() {
     setItems(copia);
   }
 
-  // ✅ al terminar de editar, volvemos a mostrar derivado (precio producto + flete)
   function finalizarEdicionPrecioUnitario(index) {
     setItems((prev) => {
       const copia = [...prev];
       const item = { ...copia[index] };
-
       item.precioUnitarioStr = "";
       copia[index] = item;
       return copia;
@@ -960,8 +964,7 @@ export default function CrearLicitacion() {
   }
 
   /* ============================================================
-     CAMBIO DE LISTA (✅ FIX: funciona aunque falte SKU)
-     ✅ NO pisa precios manuales
+     CAMBIO DE LISTA (no pisa manual)
   ============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
     const copia = items.map((it) => {
@@ -974,16 +977,15 @@ export default function CrearLicitacion() {
 
       if (!prod) return it;
 
-      const precioBase = getPrecioBaseParaSKU(prod, nuevaLista, campaignPrices);
+      const precioAuto = getPrecioBaseParaSKU(prod, nuevaLista, campaignPrices);
       const cantidad = Math.max(1, Number(it.cantidad || 1));
 
-      const precioBaseFinal = it.precioManual ? Number(it.precio || 0) : precioBase;
+      const precioBaseFinal = it.precioManual ? Number(it.precio || 0) : precioAuto;
       const precioConFlete = precioBaseFinal + fletePorUnidad;
 
       return {
         ...it,
         precio: precioBaseFinal,
-        // si es manual, mantenemos lo que escribió; si no, lo dejamos vacío (se muestra derivado)
         precioUnitarioStr: it.precioManual ? (it.precioUnitarioStr || "") : "",
         total: redondear(cantidad * precioConFlete),
       };
@@ -1017,10 +1019,8 @@ export default function CrearLicitacion() {
       item.categoria = prod.categoria || "";
       item.formato = prod.formato || "";
 
-      // ✅ precio automático por lista/campaña
       item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
 
-      // ✅ al seleccionar producto, volvemos a automático
       item.precioManual = false;
       item.precioUnitarioStr = "";
     }
@@ -1043,25 +1043,28 @@ export default function CrearLicitacion() {
   }
 
   function agregarItem() {
-    setItems([...items, crearItemVacio()]);
+    setItems((prev) => [...prev, crearItemVacio()]);
   }
 
   function insertarItemDespues(index) {
-    const copia = [...items];
-    copia.splice(index + 1, 0, crearItemVacio());
-    setItems(copia);
+    setItems((prev) => {
+      const copia = [...prev];
+      copia.splice(index + 1, 0, crearItemVacio());
+      return copia;
+    });
   }
 
   function eliminarItem(index) {
-    if (items.length === 1) return;
-    const copia = [...items];
-    copia.splice(index, 1);
-    setItems(copia);
+    setItems((prev) => {
+      if (prev.length === 1) return prev;
+      const copia = [...prev];
+      copia.splice(index, 1);
+      return copia;
+    });
   }
 
   /* ============================================================
      ✅ recalcular totales con flete
-     - si precio es manual y existe precioUnitarioStr, mantener constante el precio base (sin flete)
   ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
@@ -1069,7 +1072,6 @@ export default function CrearLicitacion() {
     const copia = items.map((it) => {
       const cantidad = Math.max(1, Number(it.cantidad || 1));
 
-      // si es manual y hay string, mantenemos constante el precio base (sin flete)
       if (it.precioManual && (it.precioUnitarioStr ?? "") !== "") {
         const baseSinFlete = parseMontoCL(it.precioUnitarioStr);
         const precioConFlete = baseSinFlete + Number(fletePorUnidad || 0);
@@ -1095,7 +1097,7 @@ export default function CrearLicitacion() {
   }, [fletePorUnidad, hydrated]);
 
   /* ============================================================
-     ✅ campañas: NO pisa precios manuales
+     ✅ campañas: NO pisa manual
   ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
@@ -1105,7 +1107,6 @@ export default function CrearLicitacion() {
     if (!tieneCamp) return;
 
     const copia = items.map((it) => {
-      // ✅ manual: no tocar (el useEffect de flete ya recalcula total)
       if (it.precioManual) return it;
 
       const sku = String(it.sku || "").trim();
@@ -1137,13 +1138,10 @@ export default function CrearLicitacion() {
   const totalIVA = Math.round(totalNeto * 0.19);
   const totalConIVA = totalNeto + totalIVA;
 
-  // ✅ monto numérico desde string con puntos
   const montoNum = parseMontoCL(monto);
 
   let porcentajePresupuesto = 0;
-  if (montoNum > 0) {
-    porcentajePresupuesto = (totalConIVA / montoNum) * 100;
-  }
+  if (montoNum > 0) porcentajePresupuesto = (totalConIVA / montoNum) * 100;
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
   if (porcentajePresupuesto <= 80)
@@ -1222,11 +1220,9 @@ export default function CrearLicitacion() {
 
   /* ============================================================
      GUARDAR LICITACIÓN
-     ✅ guarda created_by y persiste vendedor_nombre/celular/correo en la tabla licitaciones
-     ✅ SKU null si viene vacío
-     ✅ NUEVO: muestra overlay al generar PDF
-     ✅ NUEVO: no permite ID Licitación duplicado
-  ============================================================ */
+     ✅ FIX: filtra ítems vacíos + valida mínimos
+     ✅ FIX: inserta items en batch + agrega `orden`
+============================================================ */
   async function guardarLicitacion() {
     setToast(null);
 
@@ -1270,7 +1266,6 @@ export default function CrearLicitacion() {
       return;
     }
 
-    // ✅ vendedor final (se guarda en BD y se usa para PDF)
     const vendedorNombreFinal = (perfilNombre || "").toString().trim();
     const vendedorCorreoFinal = (user.email || perfilEmail || "").toString().trim();
     const vendedorCelularFinal = (perfilCelular || "").toString().trim();
@@ -1278,7 +1273,7 @@ export default function CrearLicitacion() {
     setGuardando(true);
 
     try {
-      // ✅ NUEVO: validar duplicado por ID Licitación
+      // ✅ validar duplicado por ID Licitación
       const idLicitacionNorm = (idLicitacionInput || "").toString().trim();
       const { data: dup, error: errDup } = await supabase
         .from("licitaciones")
@@ -1315,6 +1310,49 @@ export default function CrearLicitacion() {
         return;
       }
 
+      // ✅ Filtrar filas vacías
+      const itemsParaGuardar = (items || []).filter((it) => {
+        const sku = (it?.sku ?? "").trim();
+        const producto = (it?.producto ?? "").trim();
+        const formato = (it?.formato ?? "").trim();
+        const categoria = (it?.categoria ?? "").trim();
+        const obs = (it?.observacion ?? "").trim();
+        const cantidad = Number(it?.cantidad ?? 0);
+        const precio = Number(it?.precio ?? 0);
+
+        const tieneAlgo =
+          sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
+
+        return tieneAlgo;
+      });
+
+      if (itemsParaGuardar.length === 0) {
+        setToast({
+          type: "error",
+          message: "Debes agregar al menos 1 ítem válido antes de guardar.",
+        });
+        return;
+      }
+
+      // ✅ Validar mínimos por ítem
+      for (let i = 0; i < itemsParaGuardar.length; i++) {
+        const it = itemsParaGuardar[i];
+        const producto = (it?.producto ?? "").trim();
+        const cantidad = Number(it?.cantidad ?? 0);
+
+        const faltan = [];
+        if (!producto) faltan.push("Producto");
+        if (!(cantidad > 0)) faltan.push("Cantidad");
+
+        if (faltan.length > 0) {
+          setToast({
+            type: "error",
+            message: `Ítem #${i + 1} incompleto.\n\nFaltan:\n• ` + faltan.join("\n• "),
+          });
+          return;
+        }
+      }
+
       const { data: lic, error } = await supabase
         .from("licitaciones")
         .insert([
@@ -1322,7 +1360,7 @@ export default function CrearLicitacion() {
             id_licitacion: idLicitacionInput,
             nombre,
             fecha_hora_cierre: fechaHoraCierre,
-            monto: parseMontoCL(monto), // ✅ guarda numérico real
+            monto: parseMontoCL(monto),
             lista_precios: Number(listado),
 
             rut_entidad: rutEntidad,
@@ -1348,7 +1386,6 @@ export default function CrearLicitacion() {
 
             observaciones: observaciones || null,
 
-            // ✅ NUEVO: persistencia para edición/export
             created_by: user.id,
             vendedor_nombre: vendedorNombreFinal || null,
             vendedor_celular: vendedorCelularFinal || null,
@@ -1366,26 +1403,39 @@ export default function CrearLicitacion() {
 
       const idLicitacion = lic.id;
 
-      for (const it of items) {
+      // ✅ INSERT EN BATCH + ✅ ORDEN
+      const payloadItems = itemsParaGuardar.map((it, idx) => {
         const skuLimpio = String(it.sku || "").trim();
+        const cantidad = Math.max(1, Number(it.cantidad || 1));
 
-        await supabase.from("items_licitacion").insert([
-          {
-            licitacion_id: idLicitacion,
-            producto: it.producto,
-            formato: it.formato,
-            cantidad: Number(it.cantidad),
-            // ✅ unitario final (incluye flete)
-            valor_unitario: Number(it.precio) + fletePorUnidad,
-            sku: skuLimpio ? skuLimpio : null,
-            total: Number(it.total),
-            categoria: it.categoria,
-            observacion: it.observacion,
-          },
-        ]);
+        return {
+          licitacion_id: idLicitacion,
+          orden: idx + 1, // ✅ orden persistido
+          producto: it.producto || "",
+          formato: it.formato || "",
+          cantidad,
+          valor_unitario: Number(it.precio || 0) + fletePorUnidad,
+          sku: skuLimpio ? skuLimpio : null,
+          total: Number(it.total || 0),
+          categoria: it.categoria || "",
+          observacion: it.observacion || "",
+        };
+      });
+
+      const { error: errItems } = await supabase
+        .from("items_licitacion")
+        .insert(payloadItems);
+
+      if (errItems) {
+        console.error(errItems);
+        setToast({
+          type: "error",
+          message: "La licitación se creó, pero hubo un error guardando los ítems.",
+        });
+        return;
       }
 
-      // ✅ NUEVO: mostrar overlay durante generación PDF
+      // ✅ generar PDF (con el orden del array filtrado)
       setGenerandoPDF(true);
 
       await generarPDFcotizacion({
@@ -1393,7 +1443,6 @@ export default function CrearLicitacion() {
         id_licitacion: idLicitacionInput,
         fecha_emision: fechaHoy,
 
-        // ✅ consistente con lo guardado en BD
         vendedor_nombre: vendedorNombreFinal,
         vendedor_correo: vendedorCorreoFinal,
         vendedor_celular: vendedorCelularFinal,
@@ -1409,32 +1458,32 @@ export default function CrearLicitacion() {
 
         observaciones: (observaciones ?? "").toString(),
 
-        items_tabla: items
+        items_tabla: itemsParaGuardar
           .map((it, idx) => {
             const skuTxt = String(it.sku || "").trim();
-            const unitario = Number(it.precio) + fletePorUnidad;
+            const unitario = Number(it.precio || 0) + fletePorUnidad;
 
             const fila = `
-            <tr>
-              <td style="text-align:center; font-weight:bold;">${idx + 1}</td>
-              <td>${skuTxt}</td>
-              <td>${it.producto}</td>
-              <td>${it.formato}</td>
-              <td style="text-align:center;">${it.cantidad}</td>
-              <td>$ ${formatear(unitario)}</td>
-              <td>$ ${formatear(it.total)}</td>
-            </tr>
-          `;
+              <tr>
+                <td style="text-align:center; font-weight:bold;">${idx + 1}</td>
+                <td>${skuTxt}</td>
+                <td>${it.producto}</td>
+                <td>${it.formato}</td>
+                <td style="text-align:center;">${it.cantidad}</td>
+                <td>$ ${formatear(unitario)}</td>
+                <td>$ ${formatear(it.total)}</td>
+              </tr>
+            `;
 
             const filaObs = it.observacion
               ? `
-            <tr>
-              <td></td>
-              <td></td>
-              <td colspan="5" style="font-style: italic; color: #444;">
-                Observación: ${it.observacion}
-              </td>
-            </tr>`
+              <tr>
+                <td></td>
+                <td></td>
+                <td colspan="5" style="font-style: italic; color: #444;">
+                  Observación: ${it.observacion}
+                </td>
+              </tr>`
               : "";
 
             return fila + filaObs;
@@ -1460,7 +1509,7 @@ export default function CrearLicitacion() {
   }
 
   /* ============================================================
-     OPCIONES SELECT (✅ SKU: solo productos con SKU)
+     OPCIONES SELECT (SKU: solo productos con SKU)
   ============================================================ */
   const opcionesSKU = productos
     .filter((p) => String(p.sku || "").trim() !== "")
@@ -1480,19 +1529,25 @@ export default function CrearLicitacion() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleDragEnd = useCallback(
-    (event) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
+  // ✅ FIX: NO depender de "items" aquí (evita stale state)
+  // ✅ FIX: persistencia inmediata del orden
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-      const oldIndex = items.findIndex((it) => it.id === active.id);
-      const newIndex = items.findIndex((it) => it.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
+    setItems((prev) => {
+      const oldIndex = prev.findIndex((it) => it.id === active.id);
+      const newIndex = prev.findIndex((it) => it.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
 
-      setItems((prev) => arrayMove(prev, oldIndex, newIndex));
-    },
-    [items]
-  );
+      const next = arrayMove(prev, oldIndex, newIndex);
+
+      // ✅ guardar al tiro en localStorage (evita perder orden si se cae)
+      persistirDraftItems(next);
+
+      return next;
+    });
+  }, []);
 
   /* UI */
   if (perfilLoading) {
@@ -1520,7 +1575,6 @@ export default function CrearLicitacion() {
 
   return (
     <div className="w-full max-w-none mx-auto p-8">
-      {/* ✅ NUEVO: Overlay durante guardado / generación de PDF */}
       {(guardando || generandoPDF) && (
         <div className="fixed inset-0 z-[99999] bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-lg p-6 w-[360px] text-center">
@@ -1537,7 +1591,6 @@ export default function CrearLicitacion() {
         </div>
       )}
 
-      {/* Tooltip Animado Azul */}
       {tooltip.visible && (
         <div
           style={{
@@ -1574,9 +1627,7 @@ export default function CrearLicitacion() {
         Crear Licitación
       </h1>
 
-      {/* ============================================================
-          DATOS LICITACIÓN
-      ============================================================ */}
+      {/* DATOS LICITACIÓN */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">
         Datos de la Licitación
       </h2>
@@ -1665,9 +1716,7 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* ============================================================
-          DATOS ENTIDAD
-      ============================================================ */}
+      {/* DATOS ENTIDAD */}
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-xl font-semibold text-gray-800">
           Datos de la Entidad
@@ -1676,6 +1725,7 @@ export default function CrearLicitacion() {
         <button
           className="text-sm px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition"
           onClick={() => setMostrarEntidad(!mostrarEntidad)}
+          type="button"
         >
           {mostrarEntidad ? "Ocultar ▲" : "Mostrar ▼"}
         </button>
@@ -1732,7 +1782,6 @@ export default function CrearLicitacion() {
             />
           </div>
 
-          {/* ✅ REGIÓN con react-select (buscable) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Región *
@@ -1749,12 +1798,11 @@ export default function CrearLicitacion() {
               onChange={(op) => {
                 const nuevaRegion = op ? op.value : "";
                 setRegion(nuevaRegion);
-                setComuna(""); // ✅ reset comuna al cambiar región
+                setComuna("");
               }}
             />
           </div>
 
-          {/* ✅ COMUNA con react-select (buscable) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Comuna *
@@ -1835,9 +1883,7 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* ============================================================
-          ÍTEMS
-      ============================================================ */}
+      {/* ÍTEMS */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">Ítems</h2>
 
       <DndContext
@@ -1859,9 +1905,7 @@ export default function CrearLicitacion() {
               >
                 {({ dragHandleProps, onInsertAfter }) => (
                   <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3">
-                    {/* ✅ 24 columnas */}
                     <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] gap-4 items-end">
-                      {/* Items */}
                       <div className="md:col-span-1">
                         <label className="block text-xs text-gray-600 mb-1">
                           Items
@@ -1871,7 +1915,6 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      {/* SKU */}
                       <div className="md:col-span-3">
                         <label className="block text-xs text-gray-600 mb-1">
                           SKU
@@ -1890,7 +1933,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Producto */}
                       <div className="md:col-span-5">
                         <label className="block text-xs text-gray-600 mb-1">
                           Producto
@@ -1914,7 +1956,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Categoría */}
                       <div className="md:col-span-3">
                         <label className="block text-xs text-gray-600 mb-1">
                           Categoría
@@ -1926,7 +1967,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Formato */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Formato
@@ -1940,7 +1980,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Cantidad */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Cantidad
@@ -1962,7 +2001,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Precio Unitario (✅ editable, muestra unitario + flete) */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Precio Unitario
@@ -1989,7 +2027,6 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Total */}
                       <div className="md:col-span-4">
                         <label className="block text-xs text-gray-600 mb-1">
                           Total
@@ -1999,13 +2036,13 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      {/* Acciones */}
                       <div className="md:col-span-2 flex justify-end pr-1">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => toggleObservacion(index)}
                             className="cursor-pointer bg-gray-300 rounded-md w-10 h-10 text-base shadow hover:bg-gray-400 flex items-center justify-center"
                             title="Observación"
+                            type="button"
                           >
                             {it.mostrarObs ? "–" : "+"}
                           </button>
@@ -2014,6 +2051,7 @@ export default function CrearLicitacion() {
                             <button
                               onClick={() => eliminarItem(index)}
                               className="cursor-pointer bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow hover:bg-red-700"
+                              type="button"
                             >
                               Eliminar
                             </button>
@@ -2022,7 +2060,6 @@ export default function CrearLicitacion() {
                       </div>
                     </div>
 
-                    {/* controles */}
                     <div className="flex items-center gap-2">
                       <button
                         ref={dragHandleProps.ref}
@@ -2045,7 +2082,6 @@ export default function CrearLicitacion() {
                       </button>
                     </div>
 
-                    {/* Observación */}
                     {it.mostrarObs && (
                       <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] transition-all">
                         <div className="md:col-span-12">
@@ -2070,9 +2106,7 @@ export default function CrearLicitacion() {
         </SortableContext>
       </DndContext>
 
-      {/* ============================================================
-          RESUMEN
-      ============================================================ */}
+      {/* RESUMEN */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
@@ -2153,9 +2187,7 @@ export default function CrearLicitacion() {
         </div>
       </div>
 
-      {/* ============================================================
-          OBSERVACIONES (SECCIÓN AL FINAL)
-      ============================================================ */}
+      {/* OBSERVACIONES */}
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Observaciones</h2>
 
@@ -2171,13 +2203,12 @@ export default function CrearLicitacion() {
         />
       </div>
 
-      {/* ============================================================
-          BOTONES
-      ============================================================ */}
+      {/* BOTONES */}
       <div className="flex gap-4 mt-6">
         <button
           onClick={agregarItem}
           className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700"
+          type="button"
         >
           + Agregar Ítem
         </button>
@@ -2196,6 +2227,7 @@ export default function CrearLicitacion() {
           className={`cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 ${
             guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : ""
           }`}
+          type="button"
         >
           Guardar Licitación
         </button>

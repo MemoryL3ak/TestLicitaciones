@@ -924,30 +924,39 @@ export default function CrearLicitacion() {
       : 0;
 
   /* ============================================================
-     ✅ Precio Unitario editable (incluye flete)
+     ✅ Precio Unitario editable (muestra unitario + flete)
+     ✅ AL EDITAR: se considera SOLO precio del producto (sin tocar flete)
   ============================================================ */
   function actualizarPrecioUnitario(index, valorStr) {
     const copia = [...items];
     const item = { ...copia[index] };
 
-    // string formateado (con puntos)
+    // ✅ lo que el usuario escribe ES EL PRECIO DEL PRODUCTO (sin flete)
     item.precioUnitarioStr = formatearCLDesdeString(valorStr);
+    const baseSinFlete = parseMontoCL(item.precioUnitarioStr);
 
-    // número ingresado representa el precio unitario visible (incluye flete)
-    const unitConFlete = parseMontoCL(item.precioUnitarioStr);
-
-    // convertir a precio base (sin flete)
-    const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
-
-    item.precio = baseSinFlete;
+    item.precio = Math.max(0, baseSinFlete);
     item.precioManual = true;
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
-    const precioConFlete = Number(item.precio || 0) + Number(fletePorUnidad || 0);
+    const precioConFlete =
+      Number(item.precio || 0) + Number(fletePorUnidad || 0);
     item.total = redondear(cantidad * precioConFlete);
 
     copia[index] = item;
     setItems(copia);
+  }
+
+  // ✅ al terminar de editar, volvemos a mostrar derivado (precio producto + flete)
+  function finalizarEdicionPrecioUnitario(index) {
+    setItems((prev) => {
+      const copia = [...prev];
+      const item = { ...copia[index] };
+
+      item.precioUnitarioStr = "";
+      copia[index] = item;
+      return copia;
+    });
   }
 
   /* ============================================================
@@ -1052,7 +1061,7 @@ export default function CrearLicitacion() {
 
   /* ============================================================
      ✅ recalcular totales con flete
-     - si precio es manual y existe precioUnitarioStr, mantener el unitario (con flete) constante
+     - si precio es manual y existe precioUnitarioStr, mantener constante el precio base (sin flete)
   ============================================================ */
   useEffect(() => {
     if (!hydrated) return;
@@ -1060,15 +1069,14 @@ export default function CrearLicitacion() {
     const copia = items.map((it) => {
       const cantidad = Math.max(1, Number(it.cantidad || 1));
 
-      // si es manual y hay string, ajustamos base para mantener constante el unitario visible
+      // si es manual y hay string, mantenemos constante el precio base (sin flete)
       if (it.precioManual && (it.precioUnitarioStr ?? "") !== "") {
-        const unitConFlete = parseMontoCL(it.precioUnitarioStr);
-        const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
+        const baseSinFlete = parseMontoCL(it.precioUnitarioStr);
         const precioConFlete = baseSinFlete + Number(fletePorUnidad || 0);
 
         return {
           ...it,
-          precio: baseSinFlete,
+          precio: Math.max(0, baseSinFlete),
           total: redondear(cantidad * precioConFlete),
         };
       }
@@ -1954,7 +1962,7 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      {/* Precio Unitario (✅ editable, incluye flete) */}
+                      {/* Precio Unitario (✅ editable, muestra unitario + flete) */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Precio Unitario
@@ -1977,6 +1985,7 @@ export default function CrearLicitacion() {
                           onChange={(e) =>
                             actualizarPrecioUnitario(index, e.target.value)
                           }
+                          onBlur={() => finalizarEdicionPrecioUnitario(index)}
                         />
                       </div>
 

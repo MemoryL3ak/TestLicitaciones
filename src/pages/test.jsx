@@ -1,7 +1,6 @@
-// DetalleLicitacion.jsx
+// DetalleLicitacion.jsx (EditarLicitacion)
 // ✅ Regla: TODOS los campos se editan SOLO cuando estado === "En espera"
 // ✅ Estado SIEMPRE se puede cambiar
-// ✅ Además: cuando está bloqueado, los campos se ven GRIS (disabled styles)
 // ✅ Drag & drop / ítems / flete / observaciones / entidad / licitación: bloqueados si no está "En espera"
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
@@ -116,36 +115,30 @@ function filtrarPorTerminos(option, inputValue) {
 }
 
 /* ============================================================
-   ESTILOS SELECT (✅ GRIS cuando isDisabled)
+   ESTILOS SELECT
 ============================================================ */
 const customStyles = {
-  control: (base, state) => ({
+  control: (base) => ({
     ...base,
     minHeight: "40px",
     fontSize: "13px",
     fontFamily: "inherit",
-    backgroundColor: state.isDisabled ? "#f3f4f6" : "white",
-    borderColor: state.isDisabled ? "#e5e7eb" : base.borderColor,
-    boxShadow: "none",
-    cursor: state.isDisabled ? "not-allowed" : "default",
-    opacity: state.isDisabled ? 0.95 : 1,
   }),
   valueContainer: (base) => ({
     ...base,
     fontSize: "13px",
     fontFamily: "inherit",
   }),
-  input: (base, state) => ({
+  input: (base) => ({
     ...base,
     fontSize: "13px",
     fontFamily: "inherit",
-    color: state.isDisabled ? "#6b7280" : "#333",
+    color: "#333",
   }),
-  singleValue: (base, state) => ({
+  singleValue: (base) => ({
     ...base,
     fontSize: "13px",
     fontFamily: "inherit",
-    color: state.isDisabled ? "#6b7280" : base.color,
   }),
   option: (base, state) => ({
     ...base,
@@ -155,11 +148,10 @@ const customStyles = {
     color: state.isFocused ? "white" : "#333",
     cursor: "pointer",
   }),
-  placeholder: (base, state) => ({
+  placeholder: (base) => ({
     ...base,
     fontSize: "13px",
     fontFamily: "inherit",
-    color: state.isDisabled ? "#9ca3af" : base.color,
   }),
   menuPortal: (base) => ({ ...base, zIndex: 99999 }),
 };
@@ -177,6 +169,7 @@ const estadoStyles = {
 
 /* ============================================================
    REGIONES / COMUNAS
+   ⚠️ Pega aquí tu objeto REGIONES_CHILE completo (el mismo que ya tienes)
 ============================================================ */
 const REGIONES_CHILE = {
   "Arica y Parinacota": ["Arica", "Camarones", "Putre", "General Lagos"],
@@ -634,6 +627,7 @@ export default function EditarLicitacion() {
   const [loading, setLoading] = useState(true);
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
+  // ✅ NUEVO: estados para mostrar generación PDF / evitar doble click
   const [guardando, setGuardando] = useState(false);
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
@@ -650,8 +644,10 @@ export default function EditarLicitacion() {
   const [estado, setEstado] = useState("En espera");
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
 
+  // ✅ Observaciones generales
   const [observaciones, setObservaciones] = useState("");
 
+  // ✅ Vendedor (para PDF)
   const [vendedorNombre, setVendedorNombre] = useState("");
   const [vendedorCelular, setVendedorCelular] = useState("");
   const [vendedorCorreo, setVendedorCorreo] = useState("");
@@ -689,10 +685,12 @@ export default function EditarLicitacion() {
       categoria: "",
       formato: "",
       cantidad: 0,
-      precio: 0,
+      precio: 0, // base sin flete
       total: 0,
       observacion: "",
       mostrarObs: false,
+
+      // ✅ Precio Unitario editable (incluye flete)
       precioManual: false,
       precioUnitarioStr: "",
     },
@@ -702,26 +700,17 @@ export default function EditarLicitacion() {
   const [hydrated, setHydrated] = useState(false);
 
   /* ============================================================
-     ✅ REGLA DE EDICIÓN + ESTILOS GRIS (disabled)
+     ✅ REGLA DE EDICIÓN
+     Solo editable cuando estado === "En espera"
 ============================================================ */
   const esEditable = estado === "En espera";
-
-  const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 " +
-    "disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200";
-
-  const inputClassH10 =
-    "w-full h-10 rounded-md border border-gray-300 px-3 " +
-    "disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200";
-
-  const textareaClass =
-    "w-full min-h-[110px] rounded-md border border-gray-300 px-3 py-2 text-sm " +
-    "disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200";
-
-  const btnDisabled = "opacity-50 cursor-not-allowed pointer-events-none";
+  const lockInput = esEditable ? "" : "bg-gray-100 text-gray-500 cursor-not-allowed";
+  const lockBtn = esEditable ? "" : "opacity-50 cursor-not-allowed";
+  const lockProps = esEditable ? {} : { disabled: true };
+  const readOnlyProps = esEditable ? {} : { readOnly: true };
 
   /* ============================================================
-     Cliente helpers
+     Cliente helpers (✅ maybeSingle para evitar 406)
 ============================================================ */
   async function buscarClientePorRut(rut) {
     if (!rut) return;
@@ -785,13 +774,14 @@ export default function EditarLicitacion() {
   }
 
   /* ============================================================
-     ✅ Cargar vendedor desde sesión
+     ✅ Cargar vendedor desde sesión (fallback si la licitación no trae datos)
 ============================================================ */
   useEffect(() => {
     (async () => {
       try {
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
+
         if (!user) return;
 
         const meta = user.user_metadata || {};
@@ -814,6 +804,9 @@ export default function EditarLicitacion() {
     })();
   }, []);
 
+  /* ============================================================
+     Crear Item Vacío
+============================================================ */
   function crearItemVacio() {
     return {
       uid: generarUid(),
@@ -827,6 +820,7 @@ export default function EditarLicitacion() {
       total: 0,
       observacion: "",
       mostrarObs: false,
+
       precioManual: false,
       precioUnitarioStr: "",
     };
@@ -863,6 +857,7 @@ export default function EditarLicitacion() {
       setCondVenta(data.condVenta || "");
 
       setFleteEstimado(data.fleteEstimado || 0);
+
       setObservaciones(data.observaciones || "");
 
       setVendedorNombre(data.vendedorNombre || "");
@@ -884,6 +879,7 @@ export default function EditarLicitacion() {
               total: Number(it.total || 0),
               observacion: it.observacion || "",
               mostrarObs: Boolean(it.mostrarObs),
+
               precioManual: Boolean(it.precioManual),
               precioUnitarioStr: it.precioUnitarioStr || "",
             }))
@@ -922,6 +918,7 @@ export default function EditarLicitacion() {
       fleteEstimado,
       items,
       observaciones,
+
       vendedorNombre,
       vendedorCelular,
       vendedorCorreo,
@@ -983,6 +980,7 @@ export default function EditarLicitacion() {
       condVenta: condVenta || "",
 
       fleteEstimado: Number(fleteEstimado || 0),
+
       observaciones: observaciones || "",
 
       vendedorNombre: vendedorNombre || "",
@@ -999,6 +997,7 @@ export default function EditarLicitacion() {
         precio: Number(it.precio || 0),
         observacion: it.observacion || "",
         mostrarObs: Boolean(it.mostrarObs),
+
         precioManual: Boolean(it.precioManual),
         precioUnitarioStr: it.precioUnitarioStr || "",
       })),
@@ -1132,6 +1131,7 @@ export default function EditarLicitacion() {
           total: redondear(cantidad * (precioBase + fletePorUnidadDB)),
           observacion: i.observacion || "",
           mostrarObs: Boolean(i.observacion),
+
           precioManual: false,
           precioUnitarioStr: "",
         };
@@ -1323,6 +1323,7 @@ export default function EditarLicitacion() {
             total: redondear(cantidad * (precioBase + fletePorUnidadDB)),
             observacion: i.observacion || "",
             mostrarObs: Boolean(i.observacion),
+
             precioManual: false,
             precioUnitarioStr: "",
           };
@@ -1367,7 +1368,7 @@ export default function EditarLicitacion() {
       : 0;
 
   /* ============================================================
-     ✅ Precio Unitario editable
+     ✅ Precio Unitario editable (incluye flete)
 ============================================================ */
   function actualizarPrecioUnitario(index, valorStr) {
     if (!esEditable) return;
@@ -1391,6 +1392,9 @@ export default function EditarLicitacion() {
     setItems(copia);
   }
 
+  /* ============================================================
+     Recalcular totales con flete
+============================================================ */
   useEffect(() => {
     if (!hydrated) return;
 
@@ -1428,7 +1432,9 @@ export default function EditarLicitacion() {
   const totalConIVA = totalNeto + totalIVA;
 
   let porcentajePresupuesto = 0;
-  if (Number(monto) > 0) porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
+  if (Number(monto) > 0) {
+    porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
+  }
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
   if (porcentajePresupuesto <= 80)
@@ -1437,6 +1443,9 @@ export default function EditarLicitacion() {
     colorPresupuesto = "text-yellow-700 bg-yellow-100 border-yellow-300";
   else colorPresupuesto = "text-red-700 bg-red-100 border-red-300";
 
+  /* ============================================================
+     CAMBIO DE LISTA (NO pisa precios manuales)
+============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
     if (!esEditable) return;
 
@@ -1466,6 +1475,7 @@ export default function EditarLicitacion() {
       const skuProd = String(prod.sku || "").trim();
 
       const precioCampania = skuProd ? campaignPriceBySku.get(skuProd) : null;
+
       const precioBase =
         precioCampania != null
           ? Number(precioCampania)
@@ -1485,6 +1495,9 @@ export default function EditarLicitacion() {
     setItems(copia);
   }
 
+  /* ============================================================
+     ACTUALIZAR ÍTEM
+============================================================ */
   function actualizarItem(index, campo, valor) {
     if (!esEditable) return;
 
@@ -1529,6 +1542,9 @@ export default function EditarLicitacion() {
     setItems(copia);
   }
 
+  /* ============================================================
+     OBS / CRUD / INSERT ENTRE ITEMS
+============================================================ */
   function toggleObservacion(index) {
     if (!esEditable) return;
     const copia = [...items];
@@ -1589,7 +1605,7 @@ export default function EditarLicitacion() {
   );
 
   /* ============================================================
-     EXPORTAR PDF
+     EXPORTAR PDF (permitido siempre)
 ============================================================ */
   async function exportarPDF() {
     if (guardando || generandoPDF) return;
@@ -1599,6 +1615,7 @@ export default function EditarLicitacion() {
 
     try {
       const fechaHoy = new Date().toISOString().slice(0, 10);
+
       const ITEMS_POR_PAGINA = 23;
 
       const chunk = (arr, size) => {
@@ -1675,6 +1692,7 @@ export default function EditarLicitacion() {
         vendedor_ccorreo: vendedor_correo,
 
         observaciones: (observaciones ?? "").toString(),
+
         pages,
 
         afecto: formatear(totalNeto),
@@ -1690,8 +1708,7 @@ export default function EditarLicitacion() {
 
   /* ============================================================
      GUARDAR CAMBIOS
-     - Guardar siempre permitido (para cambiar estado)
-     - Si NO es editable: NO upsertea items (seguridad extra)
+     ✅ Permitido siempre (incluye cambios de estado)
 ============================================================ */
   async function guardarCambios() {
     if (guardando || generandoPDF) return false;
@@ -1798,9 +1815,14 @@ export default function EditarLicitacion() {
         return false;
       }
 
-      // ✅ Seguridad extra: si no es editable, no tocar items
+      // Si NO es editable, igual guardamos licitación (estado), pero NO permitimos cambios de ítems
+      // (Los ítems no deberían cambiar porque UI está bloqueada, pero esto agrega seguridad)
       if (!esEditable) {
-        setToast({ type: "success", message: "Estado actualizado correctamente." });
+        setToast({
+          type: "success",
+          message: `Estado actualizado correctamente.`,
+        });
+
         localStorage.removeItem(STORAGE_KEY);
         baselineRef.current = buildSnapshot();
         setIsDirty(false);
@@ -1823,9 +1845,10 @@ export default function EditarLicitacion() {
         return tieneAlgo;
       });
 
-      // 2) Validar mínimos
+      // 2) Validar: SKU ya no es obligatorio
       for (let i = 0; i < itemsParaGuardar.length; i++) {
         const it = itemsParaGuardar[i];
+
         const producto = (it?.producto ?? "").trim();
         const cantidad = Number(it?.cantidad ?? 0);
 
@@ -1842,7 +1865,7 @@ export default function EditarLicitacion() {
         }
       }
 
-      // 3) UPSERT
+      // 3) UPSERT (SKU opcional -> null)
       for (const it of itemsParaGuardar) {
         const skuLimpio = String(it?.sku ?? "").trim();
 
@@ -1981,7 +2004,7 @@ export default function EditarLicitacion() {
       {/* Aviso bloqueo */}
       {!esEditable && (
         <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
-          Esta licitación está en estado <b>{estado}</b>. Los campos están bloqueados.
+          Esta licitación está en estado <b>{estado}</b>. La edición de campos está bloqueada.
           Para editar, cambia el estado a <b>En espera</b>.
         </div>
       )}
@@ -1998,13 +2021,14 @@ export default function EditarLicitacion() {
               ID Licitación *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={idLicitacionInput}
               onChange={(e) => {
+                if (!esEditable) return;
                 setIdLicitacionInput(e.target.value);
                 setIsDirty(true);
               }}
-              disabled={!esEditable}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2013,10 +2037,10 @@ export default function EditarLicitacion() {
               Nombre Licitación *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setNombre(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2026,10 +2050,10 @@ export default function EditarLicitacion() {
             </label>
             <input
               type="datetime-local"
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={fechaHoraCierre}
-              onChange={(e) => setFechaHoraCierre(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setFechaHoraCierre(e.target.value)}
+              {...lockProps}
             />
           </div>
 
@@ -2039,10 +2063,10 @@ export default function EditarLicitacion() {
             </label>
             <input
               type="number"
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setMonto(e.target.value)}
+              {...lockProps}
             />
           </div>
 
@@ -2051,13 +2075,14 @@ export default function EditarLicitacion() {
               Lista de Precios *
             </label>
             <select
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={listado}
               onChange={(e) => {
+                if (!esEditable) return;
                 setListado(e.target.value);
                 actualizarPreciosPorLista(e.target.value);
               }}
-              disabled={!esEditable}
+              {...lockProps}
             >
               <option value="1">Lista 1</option>
               <option value="2">Lista 2</option>
@@ -2069,10 +2094,10 @@ export default function EditarLicitacion() {
               Tipo de Compra *
             </label>
             <select
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={tipoCompra}
-              onChange={(e) => setTipoCompra(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setTipoCompra(e.target.value)}
+              {...lockProps}
             >
               <option value="Compra ágil">Compra ágil</option>
               <option value="Compra directa">Compra directa</option>
@@ -2127,11 +2152,11 @@ export default function EditarLicitacion() {
               RUT *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={rutEntidad}
-              onChange={(e) => setRutEntidad(e.target.value)}
-              onBlur={() => buscarClientePorRut(rutEntidad)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setRutEntidad(e.target.value)}
+              onBlur={() => esEditable && buscarClientePorRut(rutEntidad)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2140,10 +2165,10 @@ export default function EditarLicitacion() {
               Nombre Entidad *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={nombreEntidad}
-              onChange={(e) => setNombreEntidad(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setNombreEntidad(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2152,10 +2177,10 @@ export default function EditarLicitacion() {
               Departamento *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={departamento}
-              onChange={(e) => setDepartamento(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setDepartamento(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2164,10 +2189,10 @@ export default function EditarLicitacion() {
               Municipalidad
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={municipalidad}
-              onChange={(e) => setMunicipalidad(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setMunicipalidad(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2185,6 +2210,7 @@ export default function EditarLicitacion() {
               filterOption={filtrarPorTerminos}
               value={opcionesRegion.find((o) => o.value === region) || null}
               onChange={(op) => {
+                if (!esEditable) return;
                 const nuevaRegion = op ? op.value : "";
                 setRegion(nuevaRegion);
                 setComuna("");
@@ -2207,7 +2233,7 @@ export default function EditarLicitacion() {
               filterOption={filtrarPorTerminos}
               isDisabled={!region || !esEditable}
               value={opcionesComuna(region).find((o) => o.value === comuna) || null}
-              onChange={(op) => setComuna(op ? op.value : "")}
+              onChange={(op) => esEditable && setComuna(op ? op.value : "")}
             />
           </div>
 
@@ -2216,10 +2242,10 @@ export default function EditarLicitacion() {
               Dirección *
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setDireccion(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2228,10 +2254,10 @@ export default function EditarLicitacion() {
               Contacto
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={contacto}
-              onChange={(e) => setContacto(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setContacto(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2241,10 +2267,10 @@ export default function EditarLicitacion() {
             </label>
             <input
               type="email"
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setEmail(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2253,10 +2279,10 @@ export default function EditarLicitacion() {
               Teléfono
             </label>
             <input
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setTelefono(e.target.value)}
+              {...readOnlyProps}
             />
           </div>
 
@@ -2266,10 +2292,10 @@ export default function EditarLicitacion() {
             </label>
 
             <select
-              className={inputClass}
+              className={`w-full rounded-md border border-gray-300 px-3 py-2 ${lockInput}`}
               value={condVenta}
-              onChange={(e) => setCondVenta(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setCondVenta(e.target.value)}
+              {...lockProps}
             >
               <option value="">Seleccione…</option>
               {OPCIONES_COND_VENTA.map((op) => (
@@ -2298,11 +2324,7 @@ export default function EditarLicitacion() {
             {items.map((it, index) => (
               <SortableItem key={it.uid} itemId={it.uid} disabled={!esEditable}>
                 {({ dragHandleProps }) => (
-                  <div
-                    className={`bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3 ${
-                      !esEditable ? "opacity-95" : ""
-                    }`}
-                  >
+                  <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] gap-4 items-end">
                       {/* Items */}
                       <div className="md:col-span-1">
@@ -2328,9 +2350,10 @@ export default function EditarLicitacion() {
                           filterOption={filtrarPorTerminos}
                           isDisabled={!esEditable}
                           value={opcionesSKU.find((o) => o.value === it.sku) || null}
-                          onChange={(op) =>
-                            actualizarItem(index, "sku", op ? op.value : "")
-                          }
+                          onChange={(op) => {
+                            if (!esEditable) return;
+                            actualizarItem(index, "sku", op ? op.value : "");
+                          }}
                         />
                       </div>
 
@@ -2351,9 +2374,10 @@ export default function EditarLicitacion() {
                             opcionesProducto.find((o) => o.value === it.producto) ||
                             null
                           }
-                          onChange={(op) =>
-                            actualizarItem(index, "producto", op ? op.value : "")
-                          }
+                          onChange={(op) => {
+                            if (!esEditable) return;
+                            actualizarItem(index, "producto", op ? op.value : "");
+                          }}
                           components={{ SingleValue: ProductoSingleValue }}
                           setTooltip={setTooltip}
                         />
@@ -2365,7 +2389,7 @@ export default function EditarLicitacion() {
                           Categoría
                         </label>
                         <input
-                          className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-4 text-[13px] truncate text-gray-600"
+                          className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-4 text-[13px] truncate"
                           value={it.categoria}
                           readOnly
                         />
@@ -2377,12 +2401,12 @@ export default function EditarLicitacion() {
                           Formato
                         </label>
                         <input
-                          className={`${inputClassH10} text-sm`}
+                          className={`w-full h-10 rounded-md border border-gray-300 px-3 text-sm ${lockInput}`}
                           value={it.formato}
                           onChange={(e) =>
-                            actualizarItem(index, "formato", e.target.value)
+                            esEditable && actualizarItem(index, "formato", e.target.value)
                           }
-                          disabled={!esEditable}
+                          {...readOnlyProps}
                         />
                       </div>
 
@@ -2394,7 +2418,7 @@ export default function EditarLicitacion() {
                         <input
                           type="number"
                           min="1"
-                          className={`${inputClassH10} text-sm`}
+                          className={`w-full h-10 rounded-md border border-gray-300 px-3 text-sm ${lockInput}`}
                           value={it.cantidad}
                           onInput={(e) => {
                             if (!esEditable) return;
@@ -2404,13 +2428,13 @@ export default function EditarLicitacion() {
                             }
                           }}
                           onChange={(e) =>
-                            actualizarItem(index, "cantidad", e.target.value)
+                            esEditable && actualizarItem(index, "cantidad", e.target.value)
                           }
-                          disabled={!esEditable}
+                          {...lockProps}
                         />
                       </div>
 
-                      {/* Precio Unitario */}
+                      {/* Precio Unitario (editable) */}
                       <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Precio Unitario
@@ -2419,7 +2443,7 @@ export default function EditarLicitacion() {
                         <input
                           type="text"
                           inputMode="numeric"
-                          className={`${inputClassH10} text-sm font-semibold`}
+                          className={`w-full h-10 rounded-md border border-gray-300 px-3 text-sm font-semibold ${lockInput}`}
                           value={
                             (it.precioUnitarioStr ?? "") !== ""
                               ? it.precioUnitarioStr
@@ -2431,9 +2455,9 @@ export default function EditarLicitacion() {
                                 )
                           }
                           onChange={(e) =>
-                            actualizarPrecioUnitario(index, e.target.value)
+                            esEditable && actualizarPrecioUnitario(index, e.target.value)
                           }
-                          disabled={!esEditable}
+                          {...readOnlyProps}
                         />
                       </div>
 
@@ -2454,7 +2478,9 @@ export default function EditarLicitacion() {
                             onClick={() => toggleObservacion(index)}
                             disabled={!esEditable}
                             className={`bg-gray-300 rounded-md w-10 h-10 text-base shadow flex items-center justify-center ${
-                              esEditable ? "cursor-pointer hover:bg-gray-400" : btnDisabled
+                              esEditable
+                                ? "cursor-pointer hover:bg-gray-400"
+                                : "opacity-50 cursor-not-allowed"
                             }`}
                             title="Observación"
                             type="button"
@@ -2467,7 +2493,9 @@ export default function EditarLicitacion() {
                               onClick={() => eliminarItem(index)}
                               disabled={!esEditable}
                               className={`bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow ${
-                                esEditable ? "cursor-pointer hover:bg-red-700" : btnDisabled
+                                esEditable
+                                  ? "cursor-pointer hover:bg-red-700"
+                                  : "opacity-50 cursor-not-allowed"
                               }`}
                               type="button"
                             >
@@ -2487,7 +2515,7 @@ export default function EditarLicitacion() {
                         className={`rounded-md w-9 h-9 shadow flex items-center justify-center ${
                           esEditable
                             ? "cursor-grab active:cursor-grabbing bg-gray-200 hover:bg-gray-300"
-                            : "bg-gray-100 text-gray-400 opacity-70 cursor-not-allowed"
+                            : "cursor-not-allowed bg-gray-100 opacity-50"
                         }`}
                         style={{ touchAction: "none" }}
                         title="Arrastrar para reordenar"
@@ -2501,7 +2529,9 @@ export default function EditarLicitacion() {
                         onClick={() => insertarItemDespues(index)}
                         disabled={!esEditable}
                         className={`bg-green-600 text-white rounded-md w-9 h-9 shadow flex items-center justify-center ${
-                          esEditable ? "cursor-pointer hover:bg-green-700" : btnDisabled
+                          esEditable
+                            ? "cursor-pointer hover:bg-green-700"
+                            : "opacity-50 cursor-not-allowed"
                         }`}
                         title="Agregar ítem debajo"
                       >
@@ -2517,12 +2547,13 @@ export default function EditarLicitacion() {
                             Observación
                           </label>
                           <input
-                            className={`${inputClassH10} text-sm`}
+                            className={`w-full h-10 rounded-md border border-gray-300 px-3 text-sm ${lockInput}`}
                             value={it.observacion}
                             onChange={(e) =>
+                              esEditable &&
                               actualizarItem(index, "observacion", e.target.value)
                             }
-                            disabled={!esEditable}
+                            {...readOnlyProps}
                           />
                         </div>
                       </div>
@@ -2555,10 +2586,10 @@ export default function EditarLicitacion() {
             </label>
             <input
               type="number"
-              className={inputClassH10}
+              className={`w-full h-10 rounded-md border border-gray-300 px-3 ${lockInput}`}
               value={fleteEstimado}
-              onChange={(e) => setFleteEstimado(e.target.value)}
-              disabled={!esEditable}
+              onChange={(e) => esEditable && setFleteEstimado(e.target.value)}
+              {...lockProps}
             />
           </div>
 
@@ -2626,11 +2657,11 @@ export default function EditarLicitacion() {
         </label>
 
         <textarea
-          className={textareaClass}
+          className={`w-full min-h-[110px] rounded-md border border-gray-300 px-3 py-2 text-sm ${lockInput}`}
           value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
+          onChange={(e) => esEditable && setObservaciones(e.target.value)}
           placeholder="Escribe observaciones generales para la licitación…"
-          disabled={!esEditable}
+          {...readOnlyProps}
         />
       </div>
 
@@ -2638,8 +2669,10 @@ export default function EditarLicitacion() {
       <div className="flex gap-4 mt-6">
         <button
           onClick={agregarItem}
-          className={`bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700 ${
-            (!esEditable || guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+          className={`bg-green-600 text-white px-4 py-2 rounded-md shadow ${
+            esEditable && !guardando && !generandoPDF
+              ? "cursor-pointer hover:bg-green-700"
+              : "opacity-60 cursor-not-allowed"
           }`}
           type="button"
           disabled={!esEditable || guardando || generandoPDF}
@@ -2650,8 +2683,8 @@ export default function EditarLicitacion() {
         {/* Guardar permitido siempre (para guardar cambio de estado) */}
         <button
           onClick={guardarCambios}
-          className={`bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 ${
-            (guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+          className={`bg-blue-600 text-white px-6 py-2 rounded-md shadow ${
+            guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-blue-700"
           }`}
           type="button"
           disabled={guardando || generandoPDF}
@@ -2661,8 +2694,8 @@ export default function EditarLicitacion() {
 
         <button
           onClick={exportarPDF}
-          className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
-            (guardando || generandoPDF) ? btnDisabled : "cursor-pointer"
+          className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow ${
+            guardando || generandoPDF ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-[#3f7897]"
           }`}
           type="button"
           disabled={guardando || generandoPDF}

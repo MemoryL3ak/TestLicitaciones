@@ -1915,7 +1915,7 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-4">
                         <label className="block text-xs text-gray-600 mb-1">
                           SKU
                         </label>
@@ -1933,7 +1933,7 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      <div className="md:col-span-5">
+                      <div className="md:col-span-7">
                         <label className="block text-xs text-gray-600 mb-1">
                           Producto
                         </label>
@@ -1953,17 +1953,6 @@ export default function CrearLicitacion() {
                           }
                           components={{ SingleValue: ProductoSingleValue }}
                           setTooltip={setTooltip}
-                        />
-                      </div>
-
-                      <div className="md:col-span-3">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Categoría
-                        </label>
-                        <input
-                          className="w-full h-10 rounded-md border border-gray-300 bg-gray-100 px-4 text-[13px] truncate"
-                          value={it.categoria}
-                          readOnly
                         />
                       </div>
 

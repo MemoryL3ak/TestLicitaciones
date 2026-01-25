@@ -14,6 +14,8 @@ export default function ListarLicitaciones() {
   // Filtros
   const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
   const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+  const [filtroIdLicitacion, setFiltroIdLicitacion] = useState("");
+  const [filtroComuna, setFiltroComuna] = useState("");
   const [filtroCreadores, setFiltroCreadores] = useState([]); // values internos: emails
   const [filtroEstado, setFiltroEstado] = useState("");
 
@@ -97,20 +99,6 @@ export default function ListarLicitaciones() {
   // ----------------------------------------------------------------
   // BADGES
   // ----------------------------------------------------------------
-  const badge = (n) => {
-    const base =
-      "px-2.5 py-0.5 rounded-full text-xs font-medium flex items-center justify-center";
-
-    const estilos = {
-      "1": "bg-blue-100 text-blue-700",
-      "2": "bg-green-100 text-green-700",
-      "3": "bg-purple-100 text-purple-700",
-      "4": "bg-orange-100 text-orange-700",
-    };
-
-    return `${base} ${estilos[n] || "bg-gray-200 text-gray-700"}`;
-  };
-
   const badgeEstado = (estado) => {
     const base = "px-3 py-1 rounded-full text-xs font-semibold shadow-sm";
 
@@ -162,9 +150,17 @@ export default function ListarLicitaciones() {
     const creadoPorEmail = (l.creado_por || "").trim().toLowerCase();
     const estado = l.estado || "";
     const fecha = l.fecha ? l.fecha.slice(0, 10) : "";
+    const idLicitacion = (l.id_licitacion || "").toString().trim().toLowerCase();
+    const comuna = (l.comuna || "").toString().trim().toLowerCase();
 
     const desdeOK = filtroFechaDesde ? fecha >= filtroFechaDesde : true;
     const hastaOK = filtroFechaHasta ? fecha <= filtroFechaHasta : true;
+    const idLicitacionOK = filtroIdLicitacion
+      ? idLicitacion.includes(filtroIdLicitacion.trim().toLowerCase())
+      : true;
+    const comunaOK = filtroComuna
+      ? comuna.includes(filtroComuna.trim().toLowerCase())
+      : true;
 
     const creadorOK =
       filtroCreadores.length > 0
@@ -173,7 +169,14 @@ export default function ListarLicitaciones() {
 
     const estadoOK = filtroEstado ? estado === filtroEstado : true;
 
-    return desdeOK && hastaOK && creadorOK && estadoOK;
+    return (
+      desdeOK &&
+      hastaOK &&
+      idLicitacionOK &&
+      comunaOK &&
+      creadorOK &&
+      estadoOK
+    );
   });
 
   // ----------------------------------------------------------------
@@ -190,10 +193,10 @@ export default function ListarLicitaciones() {
       const nombre = (usuariosMap[email] || "").trim();
 
       return {
-        ID: l.id,
-        Nombre: l.nombre,
+        "N° Licitación": l.id,
+        "ID Licitación": l.id_licitacion,
         Fecha: l.fecha ? l.fecha.slice(0, 10) : "",
-        Lista: l.lista_precios,
+        Comuna: l.comuna || "",
         Estado: l.estado || "",
         "Creado por": nombre || "",
       };
@@ -218,7 +221,7 @@ export default function ListarLicitaciones() {
           FILTROS
       ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-300/40 rounded-xl p-4 mb-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
           <div>
             <label className="text-sm font-semibold text-gray-700">
               Fecha desde
@@ -239,6 +242,30 @@ export default function ListarLicitaciones() {
               type="date"
               value={filtroFechaHasta}
               onChange={(e) => setFiltroFechaHasta(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-700">
+              ID Licitación
+            </label>
+            <input
+              type="text"
+              value={filtroIdLicitacion}
+              onChange={(e) => setFiltroIdLicitacion(e.target.value)}
+              placeholder="Buscar ID licitación"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-700">Comuna</label>
+            <input
+              type="text"
+              value={filtroComuna}
+              onChange={(e) => setFiltroComuna(e.target.value)}
+              placeholder="Buscar comuna"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50"
             />
           </div>
@@ -351,16 +378,16 @@ export default function ListarLicitaciones() {
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
-                  ID
+                  N° Licitación
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
-                  Nombre
+                  ID Licitación
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Fecha
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
-                  Lista
+                  Comuna
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Estado
@@ -394,7 +421,9 @@ export default function ListarLicitaciones() {
                   <tr key={l.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4 text-sm whitespace-nowrap">{l.id}</td>
 
-                    <td className="px-6 py-4 text-sm">{l.nombre}</td>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                      {l.id_licitacion || ""}
+                    </td>
 
                     <td className="px-6 py-4 text-sm whitespace-nowrap">
                       {l.fecha
@@ -402,10 +431,8 @@ export default function ListarLicitaciones() {
                         : ""}
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={badge(l.lista_precios)}>
-                        Lista {l.lista_precios}
-                      </span>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                      {l.comuna || ""}
                     </td>
 
                     <td className="px-6 py-4 whitespace-nowrap">

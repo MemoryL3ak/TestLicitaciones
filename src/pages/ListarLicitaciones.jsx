@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
+import useAuth from "../hooks/useAuth";
 
 export default function ListarLicitaciones() {
+  const { user, rol, cargando } = useAuth();
   const [data, setData] = useState([]);
 
   // Mapa: email -> nombre (UI solo muestra nombre)
@@ -30,6 +32,8 @@ export default function ListarLicitaciones() {
   }, []);
 
   async function loadData() {
+    if (cargando) return;
+
     // 1) Traer licitaciones
     const { data: licitaciones, error } = await supabase
       .from("licitaciones")
@@ -41,7 +45,16 @@ export default function ListarLicitaciones() {
       return;
     }
 
-    const rows = licitaciones || [];
+    let rows = licitaciones || [];
+
+    const rolNorm = (rol ?? "").toString().trim().toLowerCase();
+    const emailUser = (user?.email || "").trim().toLowerCase();
+
+    // ventas solo ve sus propias licitaciones; jefe_ventas ve todas
+    if (rolNorm === "ventas" && emailUser) {
+      rows = rows.filter((l) => (l.creado_por || "").trim().toLowerCase() === emailUser);
+    }
+
     setData(rows);
 
     // 2) Emails únicos desde licitaciones
@@ -79,7 +92,7 @@ export default function ListarLicitaciones() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [cargando, rol, user?.email]);
 
   // ----------------------------------------------------------------
   // BADGES

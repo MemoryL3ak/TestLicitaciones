@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
+import Toast from "./Toast";
 
-const IDLE_LOGOUT_MS = 20 * 60 * 1000; // 20 min
+const IDLE_LOGOUT_MS = 15 * 60 * 1000; // 15 min
+const IDLE_WARN_MS = 14 * 60 * 1000;   // aviso a los 14 min
 const TICK_MS = 5 * 1000;             // cada 5s calculo activo/idle local
 const FLUSH_MS = 15 * 1000;           // heartbeat a BD cada 15s
 const ACTIVE_GRACE_MS = 60 * 1000;    // actividad reciente <= 60s => "activo"
@@ -21,10 +23,16 @@ export default function SessionTracker() {
 
   const lastTickRef = useRef(Date.now());
   const lastFlushRef = useRef(Date.now());
+  const warnedRef = useRef(false);
+  const [toast, setToast] = useState(null);
 
   // registrar actividad del usuario
   useEffect(() => {
-    const touch = () => (lastActivityRef.current = Date.now());
+    const touch = () => {
+      lastActivityRef.current = Date.now();
+      warnedRef.current = false;
+      if (toast) setToast(null);
+    };
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
     document.addEventListener("visibilitychange", touch);
@@ -115,6 +123,19 @@ export default function SessionTracker() {
       lastTickRef.current = now;
 
       const idleFor = now - lastActivityRef.current;
+
+      if (
+        !warnedRef.current &&
+        idleFor >= IDLE_WARN_MS &&
+        idleFor < IDLE_LOGOUT_MS &&
+        document.visibilityState !== "hidden"
+      ) {
+        warnedRef.current = true;
+        setToast({
+          type: "error",
+          message: "Llevas 14 minutos de inactividad. Se cerrará sesión en 1 minuto.",
+        });
+      }
 
       // auto-logout por inactividad
       if (idleFor >= IDLE_LOGOUT_MS) {
@@ -266,5 +287,5 @@ export default function SessionTracker() {
     };
   }, [navigate]);
 
-  return null;
+  return toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null;
 }

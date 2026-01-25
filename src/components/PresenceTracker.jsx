@@ -5,9 +5,17 @@ export default function PresenceTracker() {
   const channelRef = useRef(null);
   const trackTimerRef = useRef(null);
   const syncTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
 
   useEffect(() => {
     let stopped = false;
+
+    const touch = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
 
     const publish = (stateObj) => {
       window.__presenceState = stateObj || {};
@@ -83,7 +91,7 @@ export default function PresenceTracker() {
             nombre: nombre || email || "Usuario",
             email,
             started_at: startedAtIso,
-            last_activity_at: new Date().toISOString(),
+            last_activity_at: new Date(lastActivityRef.current).toISOString(),
           });
         } catch {
           // best effort
@@ -137,6 +145,7 @@ export default function PresenceTracker() {
 
     return () => {
       stopped = true;
+      events.forEach((e) => window.removeEventListener(e, touch));
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
       sub?.subscription?.unsubscribe?.();

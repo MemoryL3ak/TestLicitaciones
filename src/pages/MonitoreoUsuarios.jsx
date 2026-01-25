@@ -46,10 +46,11 @@ function fmtHace(seg) {
   const s = Math.max(0, Number(seg || 0));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  const ss = s % 60;
+  if (m < 60) return `${m}m ${ss}s`;
   const h = Math.floor(m / 60);
   const mm = m % 60;
-  return `${h}h ${mm}m`;
+  return `${h}h ${mm}m ${ss}s`;
 }
 
 function statusFromIdleNowSec(idleNowSec) {
@@ -323,18 +324,41 @@ export default function MonitoreoUsuarios() {
 
   const todayISO = hoyLocalISO();
 
-  // online real = presence filtrado por heartbeat reciente (evita pegados)
+  // online real = presence filtrado por heartbeat + fallback a heartbeat aunque no haya presence
   const onlinePresenceReal = useMemo(() => {
     const nowMs = Date.now();
     const arr = Array.from(presenceMap.values());
+    const onlineIds = new Set();
+    const result = [];
 
-    return arr.filter((u) => {
+    arr.forEach((u) => {
       const hb = heartbeatMap.get(u.user_id);
-      if (!hb) return true; // recién entra puede no aparecer aún en BD
-      const ageSec = Math.floor((nowMs - new Date(hb).getTime()) / 1000);
-      return ageSec <= HEARTBEAT_ONLINE_SEC;
+      if (hb) {
+        const ageSec = Math.floor((nowMs - new Date(hb).getTime()) / 1000);
+        if (ageSec > HEARTBEAT_ONLINE_SEC) return;
+      }
+      onlineIds.add(u.user_id);
+      result.push(u);
     });
-  }, [presenceMap, heartbeatMap, tick]);
+
+    heartbeatMap.forEach((lastSeen, userId) => {
+      if (onlineIds.has(userId)) return;
+      const ageSec = Math.floor((nowMs - new Date(lastSeen).getTime()) / 1000);
+      if (ageSec > HEARTBEAT_ONLINE_SEC) return;
+      const profile = profiles.find((p) => p.id === userId);
+      if (!profile) return;
+      result.push({
+        user_id: userId,
+        nombre: profile.nombre || profile.email || "Usuario",
+        email: profile.email || null,
+        last_activity_at: null,
+        started_at: null,
+      });
+      onlineIds.add(userId);
+    });
+
+    return result;
+  }, [presenceMap, heartbeatMap, profiles, tick]);
 
   // ONLINE enriquecido (09–19)
   const onlineEnriched = useMemo(() => {

@@ -10,10 +10,11 @@
 // - GUARDAR: escribe `orden` (idx+1) en cada ítem
 // - DRAG: persiste el reorder al tiro en localStorage (no esperar al useEffect)
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Toast from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 import Select, { components } from "react-select";
 import { generarPDFcotizacion } from "../utils/generarPDFcotizacion";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext";
@@ -646,6 +647,8 @@ export default function EditarLicitacion() {
 
   const [guardando, setGuardando] = useState(false);
   const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
+  const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
 
   const STORAGE_KEY = `${STORAGE_KEY_PREFIX}${id}`;
 
@@ -665,6 +668,12 @@ export default function EditarLicitacion() {
   const [vendedorNombre, setVendedorNombre] = useState("");
   const [vendedorCelular, setVendedorCelular] = useState("");
   const [vendedorCorreo, setVendedorCorreo] = useState("");
+
+  const [rol, setRol] = useState(null);
+  const esAdmin = useMemo(() => {
+    const r = (rol ?? "").toString().trim().toLowerCase();
+    return r === "admin" || r === "administrador";
+  }, [rol]);
 
   /* ===============================
      DATOS ENTIDAD
@@ -817,6 +826,14 @@ export default function EditarLicitacion() {
         const user = data?.user;
         if (!user) return;
 
+        const { data: perfil } = await supabase
+          .from("profiles")
+          .select("rol")
+          .eq("id", user.id)
+          .single();
+
+        setRol(perfil?.rol ?? null);
+
         const meta = user.user_metadata || {};
         const emailAuth = user.email || "";
 
@@ -836,6 +853,40 @@ export default function EditarLicitacion() {
       } catch (e) {}
     })();
   }, []);
+
+  async function eliminarLicitacion() {
+    if (!esAdmin) return;
+    if (guardando || generandoPDF || eliminando) return;
+    setEliminando(true);
+    setToast(null);
+
+    try {
+      const { error: errItems } = await supabase
+        .from("items_licitacion")
+        .delete()
+        .eq("licitacion_id", id);
+
+      if (errItems) throw errItems;
+
+      const { error: errLic } = await supabase
+        .from("licitaciones")
+        .delete()
+        .eq("id", id);
+
+      if (errLic) throw errLic;
+
+      localStorage.removeItem(STORAGE_KEY);
+      setConfirmEliminarOpen(false);
+      setToast({ type: "success", message: "Licitación eliminada." });
+      requestNavigation(baseLicitaciones, { replace: true });
+    } catch (e) {
+      console.error("Error eliminando licitación:", e);
+      setToast({ type: "error", message: "No se pudo eliminar la licitación." });
+      setConfirmEliminarOpen(false);
+    } finally {
+      setEliminando(false);
+    }
+  }
 
   function crearItemVacio() {
     return {
@@ -2348,7 +2399,7 @@ export default function EditarLicitacion() {
           items={items.map((it) => it.uid)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-6 max-h-[480px] overflow-y-auto overflow-x-auto pr-2">
+          <div className="space-y-3 max-h-[900px] overflow-y-auto overflow-x-auto pr-2">
             {items.map((it, index) => (
               <SortableItem key={it.uid} itemId={it.uid} disabled={!esEditable}>
                 {({ dragHandleProps }) => (
@@ -2721,7 +2772,28 @@ export default function EditarLicitacion() {
         >
           Generar PDF
         </button>
+
+        {esAdmin && (
+          <button
+            type="button"
+            onClick={() => setConfirmEliminarOpen(true)}
+            className={`bg-red-600 text-white px-6 py-2 rounded-md shadow hover:bg-red-700 ${
+              guardando || generandoPDF || eliminando ? btnDisabled : "cursor-pointer"
+            }`}
+            disabled={guardando || generandoPDF || eliminando}
+          >
+            Eliminar
+          </button>
+        )}
       </div>
+
+      <ConfirmModal
+        open={confirmEliminarOpen}
+        title="Eliminar licitación"
+        message="¿Seguro que deseas eliminar esta licitación? Esta acción no se puede deshacer."
+        onCancel={() => setConfirmEliminarOpen(false)}
+        onConfirm={eliminarLicitacion}
+      />
     </div>
   );
 }

@@ -1895,7 +1895,7 @@ export default function CrearLicitacion() {
           items={items.map((it) => it.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-6 max-h-[480px] overflow-y-auto pr-2">
+          <div className="space-y-3 max-h-[900px] overflow-y-auto pr-2">
             {items.map((it, index) => (
               <SortableItem
                 key={it.id}

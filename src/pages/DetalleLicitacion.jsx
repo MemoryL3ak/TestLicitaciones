@@ -2436,7 +2436,7 @@ export default function EditarLicitacion() {
                         <input
                           type="number"
                           min="1"
-                          className={`${inputClassH10} text-sm`}
+                          className={`${inputClassH10} text-sm no-spinner`}
                           value={it.cantidad}
                           onInput={(e) => {
                             if (!esEditable) return;

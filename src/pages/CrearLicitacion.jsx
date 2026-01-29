@@ -1976,7 +1976,7 @@ export default function CrearLicitacion() {
                         <input
                           type="number"
                           min="1"
-                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm"
+                          className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm no-spinner"
                           value={it.cantidad}
                           onInput={(e) => {
                             e.target.value = e.target.value.replace(/[^0-9]/g, "");

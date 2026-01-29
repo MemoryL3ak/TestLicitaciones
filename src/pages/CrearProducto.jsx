@@ -211,20 +211,20 @@ export default function CrearProducto() {
     // ✅ Solo admin puede enviar sku; el resto lo manda null
     const skuPermitido = puedeIngresarSKU ? skuLimpio : null;
 
-    const { error } = await supabase.from("productos").insert([
-      {
-        sku: skuPermitido,
-        estado: estadoFinal,
-        nombre,
-        marca,
-        categoria,
-        formato,
-        lista1: Number(precios.lista1) || 0,
-        lista2: Number(precios.lista2) || 0,
-        lista3: 0,
-        lista4: 0,
-      },
-    ]);
+    const payload = {
+      sku: skuPermitido,
+      estado: estadoFinal,
+      nombre,
+      marca,
+      categoria,
+      formato,
+      lista1: Number(precios.lista1) || 0,
+      lista2: Number(precios.lista2) || 0,
+      lista3: 0,
+      lista4: 0,
+    };
+
+    const { error } = await supabase.from("productos").insert([payload]);
 
     if (error) {
       console.error(error);

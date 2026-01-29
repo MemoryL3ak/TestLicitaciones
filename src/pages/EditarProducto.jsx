@@ -141,6 +141,7 @@ export default function EditarProducto() {
     marca: "",
     categoria: "",
     formato: "",
+    costo: 0,
     lista1: 0,
     lista2: 0,
   });
@@ -153,14 +154,16 @@ export default function EditarProducto() {
     [rol]
   );
 
+  const esAdmin = useMemo(
+    () => rolNorm === "admin" || rolNorm === "administrador",
+    [rolNorm]
+  );
+
   // 1) ✅ ventas NO debe editar productos
   const puedeEditarProducto = useMemo(() => rolNorm !== "ventas", [rolNorm]);
 
   // 2) ✅ admin puede editar SKU (acepta "admin" y "administrador")
-  const puedeEditarSKU = useMemo(
-    () => rolNorm === "admin" || rolNorm === "administrador",
-    [rolNorm]
-  );
+  const puedeEditarSKU = esAdmin;
 
   useEffect(() => {
     async function obtenerRol() {
@@ -212,6 +215,7 @@ export default function EditarProducto() {
         marca: data.marca ?? "",
         categoria: data.categoria ?? "",
         formato: data.formato ?? "",
+        costo: data.costo ?? 0,
         lista1: data.lista1 ?? 0,
         lista2: data.lista2 ?? 0,
       });
@@ -273,6 +277,10 @@ async function guardarCambios() {
     lista1: Number(producto.lista1) || 0,
     lista2: Number(producto.lista2) || 0,
   };
+
+  if (esAdmin) {
+    payload.costo = Number(producto.costo) || 0;
+  }
 
   const { error } = await supabase
     .from("productos")
@@ -463,6 +471,22 @@ async function guardarCambios() {
               }
             />
           </div>
+
+          {esAdmin && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Costo
+              </label>
+              <input
+                type="number"
+                className={inputClass}
+                value={producto.costo}
+                onChange={(e) =>
+                  setProducto((prev) => ({ ...prev, costo: e.target.value }))
+                }
+              />
+            </div>
+          )}
 
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">

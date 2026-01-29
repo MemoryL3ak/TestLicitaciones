@@ -220,6 +220,7 @@ export const REGIONES_CHILE = {
 
   "Ñuble": [
     "Chillán",
+    "Cobquecura",
     "Bulnes",
     "Chillán Viejo",
     "El Carmen",

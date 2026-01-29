@@ -330,7 +330,6 @@ export default function Productos() {
                   <td className="px-6 py-3 text-sm">{p.marca || "—"}</td>
                   <td className="px-6 py-3 text-sm">{p.categoria}</td>
                   <td className="px-6 py-3 text-sm">{p.formato}</td>
-
                   <td className="px-6 py-3 text-sm font-semibold">
                     <div className="leading-tight">
                       <div>${precioNormal.toLocaleString("es-CL")}</div>

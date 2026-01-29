@@ -20,3 +20,14 @@
   @apply flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer
          hover:bg-blue-50 hover:text-blue-600 transition;
 }
+
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}

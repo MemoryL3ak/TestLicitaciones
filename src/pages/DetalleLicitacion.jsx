@@ -888,6 +888,15 @@ export default function EditarLicitacion() {
     }
   }
 
+  function getCostoParaItem(item) {
+    const sku = String(item?.sku || "").trim();
+    const prod =
+      (sku
+        ? productos.find((p) => String(p.sku || "").trim() === sku)
+        : null) || (item?.producto ? productos.find((p) => p.nombre === item.producto) : null);
+    return Number(prod?.costo ?? 0);
+  }
+
   function crearItemVacio() {
     return {
       uid: generarUid(),
@@ -1452,6 +1461,20 @@ export default function EditarLicitacion() {
     cantidadProductos > 0
       ? redondear(Number(fleteEstimado) / cantidadProductos)
       : 0;
+
+  const margenGeneral = useMemo(() => {
+    let totalVenta = 0;
+    let totalCosto = 0;
+    items.forEach((it) => {
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioBase = Number(it.precio || 0);
+      const costo = getCostoParaItem(it);
+      totalVenta += precioBase * cantidad;
+      totalCosto += costo * cantidad;
+    });
+    if (totalVenta <= 0) return 0;
+    return ((totalVenta - totalCosto) / totalVenta) * 100;
+  }, [items, productos]);
 
   /* ============================================================
      ✅ Precio Unitario editable
@@ -2399,7 +2422,7 @@ export default function EditarLicitacion() {
           items={items.map((it) => it.uid)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-3 max-h-[900px] overflow-y-auto overflow-x-auto pr-2">
+          <div className="space-y-3 max-h-[900px] overflow-y-auto pr-2">
             {items.map((it, index) => (
               <SortableItem key={it.uid} itemId={it.uid} disabled={!esEditable}>
                 {({ dragHandleProps }) => (
@@ -2420,7 +2443,7 @@ export default function EditarLicitacion() {
                       </div>
 
                       {/* SKU */}
-                      <div className="md:col-span-4">
+                      <div className={esAdmin ? "md:col-span-3" : "md:col-span-4"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           SKU (opcional)
                         </label>
@@ -2440,7 +2463,7 @@ export default function EditarLicitacion() {
                       </div>
 
                       {/* Producto */}
-                      <div className="md:col-span-7">
+                      <div className={esAdmin ? "md:col-span-6" : "md:col-span-7"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           Producto *
                         </label>
@@ -2530,8 +2553,27 @@ export default function EditarLicitacion() {
                         />
                       </div>
 
+                      {esAdmin && (
+                        <div className="md:col-span-2">
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Margen
+                          </label>
+                          <input
+                            className={`${inputClassH10} text-sm bg-gray-50`}
+                            readOnly
+                            value={(() => {
+                              const costo = getCostoParaItem(it);
+                              const precioBase = Number(it.precio || 0);
+                              if (precioBase <= 0) return "0.00%";
+                              const margen = ((precioBase - costo) / precioBase) * 100;
+                              return `${margen.toFixed(2)}%`;
+                            })()}
+                          />
+                        </div>
+                      )}
+
                       {/* Total */}
-                      <div className="md:col-span-4">
+                      <div className="md:col-span-3">
                         <label className="block text-xs text-gray-600 mb-1">
                           Total
                         </label>
@@ -2541,15 +2583,17 @@ export default function EditarLicitacion() {
                       </div>
 
                       {/* Acciones */}
-                      <div className="md:col-span-2 flex justify-end pr-1">
+                      <div
+                        className={`flex justify-start pr-1 ${
+                          esAdmin ? "md:col-span-2" : "md:col-span-3"
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => toggleObservacion(index)}
                             disabled={!esEditable}
-                            className={`bg-gray-300 rounded-md w-10 h-10 text-base shadow flex items-center justify-center ${
-                              esEditable
-                                ? "cursor-pointer hover:bg-gray-400"
-                                : btnDisabled
+                            className={`bg-gray-300 rounded-md shadow flex items-center justify-center w-9 h-9 text-base ${
+                              esEditable ? "cursor-pointer hover:bg-gray-400" : btnDisabled
                             }`}
                             title="Observación"
                             type="button"
@@ -2561,10 +2605,8 @@ export default function EditarLicitacion() {
                             <button
                               onClick={() => eliminarItem(index)}
                               disabled={!esEditable}
-                              className={`bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow ${
-                                esEditable
-                                  ? "cursor-pointer hover:bg-red-700"
-                                  : btnDisabled
+                              className={`bg-red-600 text-white rounded-md shadow px-4 py-2 text-sm ${
+                                esEditable ? "cursor-pointer hover:bg-red-700" : btnDisabled
                               }`}
                               type="button"
                             >
@@ -2573,6 +2615,7 @@ export default function EditarLicitacion() {
                           )}
                         </div>
                       </div>
+
                     </div>
 
                     {/* mover + insertar */}
@@ -2606,6 +2649,7 @@ export default function EditarLicitacion() {
                       >
                         +
                       </button>
+
                     </div>
 
                     {/* Observación */}
@@ -2670,7 +2714,14 @@ export default function EditarLicitacion() {
             </div>
           </div>
 
-          <div></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Margen General
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+              {margenGeneral.toFixed(2)}%
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

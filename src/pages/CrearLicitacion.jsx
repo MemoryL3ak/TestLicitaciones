@@ -668,6 +668,11 @@ export default function CrearLicitacion() {
     return ["admin", "jefe_ventas", "ventas"].includes(rol);
   }, [rol]);
 
+  const esAdmin = useMemo(() => {
+    const r = (rol ?? "").toString().trim().toLowerCase();
+    return r === "admin" || r === "administrador";
+  }, [rol]);
+
   const [mostrarEntidad, setMostrarEntidad] = useState(true);
 
   const [idLicitacionInput, setIdLicitacionInput] = useState("");
@@ -931,6 +936,20 @@ export default function CrearLicitacion() {
       ? redondear(Number(fleteEstimado) / cantidadProductos)
       : 0;
 
+  const margenGeneral = useMemo(() => {
+    let totalVenta = 0;
+    let totalCosto = 0;
+    items.forEach((it) => {
+      const cantidad = Math.max(1, Number(it.cantidad || 1));
+      const precioBase = Number(it.precio || 0);
+      const costo = getCostoParaItem(it);
+      totalVenta += precioBase * cantidad;
+      totalCosto += costo * cantidad;
+    });
+    if (totalVenta <= 0) return 0;
+    return ((totalVenta - totalCosto) / totalVenta) * 100;
+  }, [items, productos]);
+
   /* ============================================================
      Precio Unitario editable
   ============================================================ */
@@ -1033,6 +1052,15 @@ export default function CrearLicitacion() {
 
     copia[index] = item;
     setItems(copia);
+  }
+
+  function getCostoParaItem(item) {
+    const sku = String(item?.sku || "").trim();
+    const prod =
+      (sku
+        ? productos.find((p) => String(p.sku || "").trim() === sku)
+        : null) || (item?.producto ? productos.find((p) => p.nombre === item.producto) : null);
+    return Number(prod?.costo ?? 0);
   }
 
   /* OBS / CRUD */
@@ -1915,7 +1943,7 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      <div className="md:col-span-4">
+                      <div className={esAdmin ? "md:col-span-3" : "md:col-span-4"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           SKU
                         </label>
@@ -1933,7 +1961,7 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      <div className="md:col-span-7">
+                      <div className={esAdmin ? "md:col-span-6" : "md:col-span-7"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           Producto
                         </label>
@@ -2016,7 +2044,26 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      <div className="md:col-span-4">
+                      {esAdmin && (
+                        <div className="md:col-span-2">
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Margen
+                          </label>
+                          <input
+                            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm bg-gray-50"
+                            readOnly
+                            value={(() => {
+                              const costo = getCostoParaItem(it);
+                              const precioBase = Number(it.precio || 0);
+                              if (precioBase <= 0) return "0.00%";
+                              const margen = ((precioBase - costo) / precioBase) * 100;
+                              return `${margen.toFixed(2)}%`;
+                            })()}
+                          />
+                        </div>
+                      )}
+
+                      <div className="md:col-span-3">
                         <label className="block text-xs text-gray-600 mb-1">
                           Total
                         </label>
@@ -2025,11 +2072,15 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      <div className="md:col-span-2 flex justify-end pr-1">
+                      <div
+                        className={`flex justify-start pr-1 ${
+                          esAdmin ? "md:col-span-2" : "md:col-span-3"
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => toggleObservacion(index)}
-                            className="cursor-pointer bg-gray-300 rounded-md w-10 h-10 text-base shadow hover:bg-gray-400 flex items-center justify-center"
+                            className="cursor-pointer bg-gray-300 rounded-md shadow hover:bg-gray-400 flex items-center justify-center w-9 h-9 text-base"
                             title="Observación"
                             type="button"
                           >
@@ -2039,7 +2090,7 @@ export default function CrearLicitacion() {
                           {items.length > 1 && (
                             <button
                               onClick={() => eliminarItem(index)}
-                              className="cursor-pointer bg-red-600 text-white px-4 py-2 rounded-md text-sm shadow hover:bg-red-700"
+                              className="cursor-pointer bg-red-600 text-white rounded-md shadow hover:bg-red-700 px-4 py-2 text-sm"
                               type="button"
                             >
                               Eliminar
@@ -2047,6 +2098,7 @@ export default function CrearLicitacion() {
                           )}
                         </div>
                       </div>
+
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -2069,6 +2121,7 @@ export default function CrearLicitacion() {
                       >
                         +
                       </button>
+
                     </div>
 
                     {it.mostrarObs && (
@@ -2130,7 +2183,14 @@ export default function CrearLicitacion() {
             </div>
           </div>
 
-          <div></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Margen General
+            </label>
+            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+              {margenGeneral.toFixed(2)}%
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

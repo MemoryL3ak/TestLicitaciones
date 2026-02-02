@@ -1381,6 +1381,8 @@ export default function CrearLicitacion() {
         }
       }
 
+      const requiereAprobacion = margenGeneral < 20;
+
       const { data: lic, error } = await supabase
         .from("licitaciones")
         .insert([
@@ -1406,7 +1408,7 @@ export default function CrearLicitacion() {
 
             fecha: fechaHoy,
             creado_por: user.email,
-            estado: "En espera",
+            estado: requiereAprobacion ? "Pendiente Aprobación" : "En espera",
             flete_estimado: Number(fleteEstimado),
             total_con_iva: totalConIVA,
             total_sin_iva: totalNeto,
@@ -1460,6 +1462,17 @@ export default function CrearLicitacion() {
           type: "error",
           message: "La licitación se creó, pero hubo un error guardando los ítems.",
         });
+        return;
+      }
+
+      if (requiereAprobacion) {
+        setToast({
+          type: "success",
+          message:
+            "Licitación guardada en estado \"Pendiente Aprobación\" (margen general < 20%).",
+        });
+        localStorage.removeItem(STORAGE_KEY);
+        limpiarDatos();
         return;
       }
 

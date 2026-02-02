@@ -180,6 +180,7 @@ const estadoStyles = {
   Perdida: "bg-red-50 text-red-800 border-red-300",
   Desierta: "bg-gray-100 text-gray-700 border-gray-300",
   Descartada: "bg-purple-50 text-purple-800 border-purple-300",
+  "Pendiente Aprobación": "bg-orange-50 text-orange-800 border-orange-300",
 };
 
 /* ============================================================
@@ -649,6 +650,7 @@ export default function EditarLicitacion() {
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
+  const [aprobando, setAprobando] = useState(false);
 
   const STORAGE_KEY = `${STORAGE_KEY_PREFIX}${id}`;
 
@@ -885,6 +887,32 @@ export default function EditarLicitacion() {
       setConfirmEliminarOpen(false);
     } finally {
       setEliminando(false);
+    }
+  }
+
+  async function aprobarLicitacion() {
+    if (!esAdmin) return;
+    if (aprobando || guardando || generandoPDF || eliminando) return;
+    if (estado !== "Pendiente Aprobación") return;
+
+    setAprobando(true);
+    setToast(null);
+
+    try {
+      const { error } = await supabase
+        .from("licitaciones")
+        .update({ estado: "En espera" })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setEstado("En espera");
+      setToast({ type: "success", message: "Licitación aprobada." });
+    } catch (e) {
+      console.error("Error aprobando licitación:", e);
+      setToast({ type: "error", message: "No se pudo aprobar la licitación." });
+    } finally {
+      setAprobando(false);
     }
   }
 
@@ -1712,6 +1740,14 @@ export default function EditarLicitacion() {
 ============================================================ */
   async function exportarPDF() {
     if (guardando || generandoPDF) return;
+    if (estado === "Pendiente Aprobación") {
+      setToast({
+        type: "error",
+        message:
+          "No se puede generar PDF mientras la licitación esté en \"Pendiente Aprobación\".",
+      });
+      return;
+    }
 
     setToast(null);
     setGenerandoPDF(true);
@@ -1879,6 +1915,13 @@ export default function EditarLicitacion() {
         return false;
       }
 
+      const requiereAprobacion = margenGeneral < 20;
+      const estadoFinal = requiereAprobacion ? "Pendiente Aprobación" : estado;
+
+      if (estadoFinal !== estado) {
+        setEstado(estadoFinal);
+      }
+
       const { error: errUpdate } = await supabase
         .from("licitaciones")
         .update({
@@ -1901,7 +1944,7 @@ export default function EditarLicitacion() {
           telefono,
           condicion_venta: condVenta,
 
-          estado,
+          estado: estadoFinal,
           flete_estimado: Number(fleteEstimado),
 
           total_con_iva: totalConIVA,
@@ -1916,6 +1959,14 @@ export default function EditarLicitacion() {
         console.error(errUpdate);
         setToast({ type: "error", message: "Error al guardar licitación" });
         return false;
+      }
+
+      if (requiereAprobacion) {
+        setToast({
+          type: "success",
+          message:
+            "Licitación guardada en estado \"Pendiente Aprobación\" (margen general < 20%).",
+        });
       }
 
       // ✅ Seguridad extra: si no es editable, no tocar items
@@ -2095,13 +2146,27 @@ export default function EditarLicitacion() {
           Edición de Licitación #{idLicitacionInput}
         </h1>
 
-        <button
-          type="button"
-          onClick={volver}
-          className="cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition"
-        >
-          ← Volver
-        </button>
+        <div className="flex items-center gap-2">
+          {esAdmin && estado === "Pendiente Aprobación" && (
+            <button
+              type="button"
+              onClick={aprobarLicitacion}
+              className={`cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 transition ${
+                aprobando ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+              disabled={aprobando}
+            >
+              Aprobar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={volver}
+            className="cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition"
+          >
+            ← Volver
+          </button>
+        </div>
       </div>
 
       {/* Aviso bloqueo */}
@@ -2220,6 +2285,7 @@ export default function EditarLicitacion() {
               onChange={(e) => setEstado(e.target.value)}
             >
               <option value="En espera">En espera</option>
+              <option value="Pendiente Aprobación">Pendiente Aprobación</option>
               <option value="Adjudicada">Adjudicada</option>
               <option value="Perdida">Perdida</option>
               <option value="Desierta">Desierta</option>
@@ -2816,10 +2882,12 @@ export default function EditarLicitacion() {
         <button
           onClick={exportarPDF}
           className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
-            guardando || generandoPDF ? btnDisabled : "cursor-pointer"
+            guardando || generandoPDF || estado === "Pendiente Aprobación"
+              ? btnDisabled
+              : "cursor-pointer"
           }`}
           type="button"
-          disabled={guardando || generandoPDF}
+          disabled={guardando || generandoPDF || estado === "Pendiente Aprobación"}
         >
           Generar PDF
         </button>

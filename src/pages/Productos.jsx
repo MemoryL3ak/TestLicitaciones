@@ -85,14 +85,19 @@ export default function Productos() {
 
     if (!data) return;
 
-    const clean = data.map((p) => ({
-      ...p,
-      sku: p.sku?.trim() ?? "",
-      nombre: p.nombre?.trim() ?? "",
-      categoria: p.categoria?.trim() ?? "",
-      formato: p.formato?.trim() ?? "",
-      marca: p.marca?.trim() ?? "",
-    }));
+    const clean = data.map((p) => {
+      const nombre =
+        (p.nombre?.trim() || "") || (p.descripcion?.trim() || "");
+
+      return {
+        ...p,
+        sku: p.sku?.trim() ?? "",
+        nombre,
+        categoria: p.categoria?.trim() ?? "",
+        formato: p.formato?.trim() ?? "",
+        marca: p.marca?.trim() ?? "",
+      };
+    });
 
     setProductos(clean);
   }

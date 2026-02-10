@@ -561,6 +561,7 @@ function crearItemVacio() {
     formato: "",
     cantidad: 0,
     precio: 0, // precio base (sin flete)
+    costo: 0,
     total: 0,
     observacion: "",
     mostrarObs: false,
@@ -568,6 +569,10 @@ function crearItemVacio() {
     // ✅ NUEVO (Precio Unitario editable)
     precioManual: false,
     precioUnitarioStr: "", // string formateado para input
+
+    // ✅ NUEVO (Costo editable)
+    costoManual: false,
+    costoStr: "",
   };
 }
 
@@ -983,6 +988,33 @@ export default function CrearLicitacion() {
   }
 
   /* ============================================================
+     Costo editable (solo admin)
+  ============================================================ */
+  function actualizarCostoItem(index, valorStr) {
+    const copia = [...items];
+    const item = { ...copia[index] };
+
+    item.costoStr = formatearCLDesdeString(valorStr);
+    const costo = parseMontoCL(item.costoStr);
+
+    item.costo = Math.max(0, costo);
+    item.costoManual = true;
+
+    copia[index] = item;
+    setItems(copia);
+  }
+
+  function finalizarEdicionCosto(index) {
+    setItems((prev) => {
+      const copia = [...prev];
+      const item = { ...copia[index] };
+      item.costoStr = "";
+      copia[index] = item;
+      return copia;
+    });
+  }
+
+  /* ============================================================
      CAMBIO DE LISTA (no pisa manual)
   ============================================================ */
   function actualizarPreciosPorLista(nuevaLista) {
@@ -1039,9 +1071,13 @@ export default function CrearLicitacion() {
       item.formato = prod.formato || "";
 
       item.precio = getPrecioBaseParaSKU(prod, listado, campaignPrices);
+      item.costo = Number(prod.costo ?? 0);
 
       item.precioManual = false;
       item.precioUnitarioStr = "";
+
+      item.costoManual = false;
+      item.costoStr = "";
     }
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
@@ -1055,6 +1091,7 @@ export default function CrearLicitacion() {
   }
 
   function getCostoParaItem(item) {
+    if (item?.costo != null && item.costo !== "") return Number(item.costo || 0);
     const sku = String(item?.sku || "").trim();
     const prod =
       (sku
@@ -1956,7 +1993,7 @@ export default function CrearLicitacion() {
                         </div>
                       </div>
 
-                      <div className={esAdmin ? "md:col-span-3" : "md:col-span-4"}>
+                      <div className={esAdmin ? "md:col-span-3" : "md:col-span-3"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           SKU
                         </label>
@@ -1974,7 +2011,7 @@ export default function CrearLicitacion() {
                         />
                       </div>
 
-                      <div className={esAdmin ? "md:col-span-6" : "md:col-span-7"}>
+                      <div className={esAdmin ? "md:col-span-4" : "md:col-span-9"}>
                         <label className="block text-xs text-gray-600 mb-1">
                           Producto
                         </label>
@@ -2060,6 +2097,28 @@ export default function CrearLicitacion() {
                       {esAdmin && (
                         <div className="md:col-span-2">
                           <label className="block text-xs text-gray-600 mb-1">
+                            Costo
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm font-semibold bg-white"
+                            value={
+                              (it.costoStr ?? "").toString() !== ""
+                                ? it.costoStr
+                                : formatearCLDesdeString(
+                                    String(Number(getCostoParaItem(it) || 0))
+                                  )
+                            }
+                            onChange={(e) => actualizarCostoItem(index, e.target.value)}
+                            onBlur={() => finalizarEdicionCosto(index)}
+                          />
+                        </div>
+                      )}
+
+                      {esAdmin && (
+                        <div className="md:col-span-2">
+                          <label className="block text-xs text-gray-600 mb-1">
                             Margen
                           </label>
                           <input
@@ -2076,7 +2135,7 @@ export default function CrearLicitacion() {
                         </div>
                       )}
 
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-2">
                         <label className="block text-xs text-gray-600 mb-1">
                           Total
                         </label>
@@ -2086,11 +2145,11 @@ export default function CrearLicitacion() {
                       </div>
 
                       <div
-                        className={`flex justify-start pr-1 ${
-                          esAdmin ? "md:col-span-2" : "md:col-span-3"
+                        className={`flex justify-end ${
+                          esAdmin ? "md:col-span-3" : "md:col-span-3"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           <button
                             onClick={() => toggleObservacion(index)}
                             className="cursor-pointer bg-gray-300 rounded-md shadow hover:bg-gray-400 flex items-center justify-center w-9 h-9 text-base"
@@ -2103,7 +2162,7 @@ export default function CrearLicitacion() {
                           {items.length > 1 && (
                             <button
                               onClick={() => eliminarItem(index)}
-                              className="cursor-pointer bg-red-600 text-white rounded-md shadow hover:bg-red-700 px-4 py-2 text-sm"
+                              className="cursor-pointer bg-red-600 text-white rounded-md shadow hover:bg-red-700 px-3 py-2 text-sm whitespace-nowrap"
                               type="button"
                             >
                               Eliminar

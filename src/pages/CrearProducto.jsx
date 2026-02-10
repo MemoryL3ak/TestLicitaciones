@@ -132,6 +132,17 @@ export default function CrearProducto() {
   const [marca, setMarca] = useState("");
   const [categoria, setCategoria] = useState(""); // ✅ ahora viene del Select
   const [formato, setFormato] = useState("");
+  const [costo, setCosto] = useState("");
+  const [presentacion, setPresentacion] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [composicion, setComposicion] = useState("");
+  const [usoIndicaciones, setUsoIndicaciones] = useState("");
+  const [beneficios, setBeneficios] = useState("");
+  const [modoUso, setModoUso] = useState("");
+  const [almacenamiento, setAlmacenamiento] = useState("");
+  const [datosClave, setDatosClave] = useState("");
+  const [imagenFile, setImagenFile] = useState(null);
+  const [imagenPreview, setImagenPreview] = useState("");
 
   const [precios, setPrecios] = useState({
     lista1: "",
@@ -189,9 +200,46 @@ export default function CrearProducto() {
   const puedeIngresarSKU = useMemo(() => {
     return rol === "admin" || rol === "Administrador";
   }, [rol]);
+  const esAdmin = puedeIngresarSKU;
+
+  useEffect(() => {
+    if (!imagenFile) {
+      setImagenPreview("");
+      return;
+    }
+
+    const url = URL.createObjectURL(imagenFile);
+    setImagenPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imagenFile]);
 
   function actualizarPrecio(lista, valor) {
     setPrecios((prev) => ({ ...prev, [lista]: valor }));
+  }
+
+  async function subirImagenProducto() {
+    if (!imagenFile) return "";
+
+    const ext = imagenFile.name.split(".").pop()?.toLowerCase() || "jpg";
+    const skuBase = (sku ?? "").toString().trim().toUpperCase();
+    const safeSku = skuBase
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = safeSku
+      ? `productos/${safeSku}.${ext}`
+      : `productos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, imagenFile, {
+        contentType: imagenFile.type || "image/jpeg",
+        upsert: true,
+      });
+
+    if (upErr) throw upErr;
+
+    return fileName;
   }
 
   async function guardarProducto() {
@@ -200,16 +248,38 @@ export default function CrearProducto() {
     const skuLimpio = (sku ?? "").toString().trim().toUpperCase();
     const estadoFinal = skuLimpio ? "Activo" : "Transitorio";
 
-    if (!nombre || !categoria || !formato) {
+    const missing = [];
+    if (!(nombre ?? "").toString().trim()) missing.push("Nombre del Producto");
+    if (!(categoria ?? "").toString().trim()) missing.push("Categoría");
+    if (!(formato ?? "").toString().trim()) missing.push("Formato");
+    if (!(presentacion ?? "").toString().trim()) missing.push("Presentación");
+    if (!(descripcion ?? "").toString().trim()) missing.push("Descripción");
+    if (!(composicion ?? "").toString().trim()) missing.push("Composición");
+    if (!(usoIndicaciones ?? "").toString().trim()) missing.push("Uso/Indicaciones");
+    if (!(beneficios ?? "").toString().trim()) missing.push("Beneficios");
+
+    if (missing.length) {
       setToast({
         type: "error",
-        message: "Debes completar Nombre, Categoría y Formato.",
+        message: `Debes completar: ${missing.join(", ")}.`,
       });
       return;
     }
 
     // ✅ Solo admin puede enviar sku; el resto lo manda null
     const skuPermitido = puedeIngresarSKU ? skuLimpio : null;
+
+    let imagenUrl = "";
+    try {
+      imagenUrl = await subirImagenProducto();
+    } catch (e) {
+      console.error(e);
+      setToast({
+        type: "error",
+        message: "Error subiendo la imagen del producto.",
+      });
+      return;
+    }
 
     const payload = {
       sku: skuPermitido,
@@ -218,11 +288,24 @@ export default function CrearProducto() {
       marca,
       categoria,
       formato,
+      imagen_url: imagenUrl || null,
+      presentacion,
+      descripcion,
+      composicion,
+      uso_indicaciones: usoIndicaciones,
+      beneficios,
+      modo_uso: modoUso,
+      almacenamiento,
+      datos_clave: datosClave,
       lista1: Number(precios.lista1) || 0,
       lista2: Number(precios.lista2) || 0,
       lista3: 0,
       lista4: 0,
     };
+
+    if (esAdmin) {
+      payload.costo = Number(costo) || 0;
+    }
 
     const { error } = await supabase.from("productos").insert([payload]);
 
@@ -246,11 +329,21 @@ export default function CrearProducto() {
     setMarca("");
     setCategoria("");
     setFormato("");
+    setCosto("");
+    setPresentacion("");
+    setDescripcion("");
+    setComposicion("");
+    setUsoIndicaciones("");
+    setBeneficios("");
+    setModoUso("");
+    setAlmacenamiento("");
+    setDatosClave("");
+    setImagenFile(null);
     setPrecios({ lista1: "", lista2: "", lista3: "", lista4: "" });
   }
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-6xl p-8">
       {toast && (
         <Toast
           type={toast.type}
@@ -271,111 +364,282 @@ export default function CrearProducto() {
       </Link>
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
-        <div className="grid grid-cols-1 gap-6">
-          {/* ESTADO */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estado
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
-              value={sku.trim() ? "Activo" : "Transitorio"}
-              readOnly
-            />
-          </div>
-
-          {/* SKU */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              SKU
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={sku}
-              disabled={rolLoading || !puedeIngresarSKU}
-              onChange={(e) => {
-                const val = e.target.value.toUpperCase();
-                setSku(val);
-                setEstado(val.trim() ? "Activo" : "Transitorio");
-              }}
-              placeholder="Ej: PH00001"
-            />
-
-            {rolLoading ? (
-              <p className="text-xs text-gray-500 mt-1">Cargando permisos…</p>
-            ) : !puedeIngresarSKU ? (
-              <p className="text-xs text-red-600 mt-1">
-                Tu rol no permite ingresar SKU.
-              </p>
-            ) : (
-              <p className="text-xs text-gray-500 mt-1">
-                Solo admin puede asignar SKU (opcional).
-              </p>
-            )}
-          </div>
-
-          {/* NOMBRE */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre del Producto
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-            />
-          </div>
-
-          {/* MARCA */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Marca
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={marca}
-              onChange={(e) => setMarca(e.target.value)}
-              placeholder="Ej: Curaprox, Vitis, Dentaid"
-            />
-          </div>
-
-          {/* CATEGORÍA (✅ ahora es lista tipo react-select) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Categoría
-            </label>
-
-            <Select
-              options={opcionesCategoria}
-              styles={customStyles}
-              placeholder="Seleccione categoría…"
-              menuPortalTarget={document.body}
-              isSearchable={true}
-              filterOption={filtrarPorTerminos}
-              value={opcionesCategoria.find((o) => o.value === categoria) || null}
-              onChange={(op) => setCategoria(op ? op.value : "")}
-            />
-          </div>
-
-          {/* FORMATO */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Formato
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
-              value={formato}
-              onChange={(e) => setFormato(e.target.value)}
-            />
-          </div>
-
-          {/* PRECIOS */}
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* INFORMACIÓN GENERAL */}
+          <div className="md:col-span-2">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">
-              Listas de Precios
+              Información General
+            </h3>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Estado
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
+                      value={sku.trim() ? "Activo" : "Transitorio"}
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SKU
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                      value={sku}
+                      disabled={rolLoading || !puedeIngresarSKU}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setSku(val);
+                        setEstado(val.trim() ? "Activo" : "Transitorio");
+                      }}
+                      placeholder="Ej: PH00001"
+                    />
+
+                    {rolLoading ? (
+                      <p className="text-xs text-gray-500 mt-1">Cargando permisos…</p>
+                    ) : !puedeIngresarSKU ? (
+                      <p className="text-xs text-red-600 mt-1">
+                        Tu rol no permite ingresar SKU.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Solo admin puede asignar SKU (opcional).
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre del Producto *
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Marca
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                      value={marca}
+                      onChange={(e) => setMarca(e.target.value)}
+                      placeholder="Ej: Curaprox, Vitis, Dentaid"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Categoría
+                    </label>
+
+                    <Select
+                      options={opcionesCategoria}
+                      styles={customStyles}
+                      placeholder="Seleccione categoría…"
+                      menuPortalTarget={document.body}
+                      isSearchable={true}
+                      filterOption={filtrarPorTerminos}
+                      value={
+                        opcionesCategoria.find((o) => o.value === categoria) || null
+                      }
+                      onChange={(op) => setCategoria(op ? op.value : "")}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Formato *
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                      value={formato}
+                      onChange={(e) => setFormato(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-1">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="text-sm font-semibold text-gray-800 mb-3">
+                    Imagen del Producto
+                  </div>
+
+                  {imagenPreview ? (
+                    <div className="h-56 w-full rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden">
+                      <img
+                        src={imagenPreview}
+                        alt="Preview"
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-56 w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500 flex items-center justify-center">
+                      Sin imagen
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      JPG o PNG
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">
+                        Seleccionar imagen
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          className="hidden"
+                          onChange={(e) =>
+                            setImagenFile(e.target.files?.[0] || null)
+                          }
+                        />
+                      </label>
+                      <span className="text-xs text-gray-500 truncate">
+                        {imagenFile?.name || "Sin archivo"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* DETALLE DEL PRODUCTO */}
+          <div className="md:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+              Detalle del Producto
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Presentación *
+                </label>
+                <input
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={presentacion}
+                  onChange={(e) => setPresentacion(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Descripción *
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Composición *
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={composicion}
+                  onChange={(e) => setComposicion(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Uso/Indicaciones *
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={usoIndicaciones}
+                  onChange={(e) => setUsoIndicaciones(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Beneficios *
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={beneficios}
+                  onChange={(e) => setBeneficios(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Modo de uso
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={modoUso}
+                  onChange={(e) => setModoUso(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Almacenamiento
+                </label>
+                <textarea
+                  rows={2}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={almacenamiento}
+                  onChange={(e) => setAlmacenamiento(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Datos Clave
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={datosClave}
+                  onChange={(e) => setDatosClave(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* LISTA DE PRECIOS */}
+          <div className="md:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+              Lista de Precios
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {esAdmin && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Costo
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                    value={costo}
+                    onChange={(e) => setCosto(e.target.value)}
+                  />
+                </div>
+              )}
+
               {["lista1", "lista2"].map((list) => (
                 <div key={list}>
                   <label className="block text-sm text-gray-600 mb-1">

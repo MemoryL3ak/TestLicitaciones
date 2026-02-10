@@ -1100,6 +1100,13 @@ export default function CrearLicitacion() {
     return Number(prod?.costo ?? 0);
   }
 
+  function calcularMargenItem(item) {
+    const costo = getCostoParaItem(item);
+    const precioBase = Number(item?.precio || 0);
+    if (precioBase <= 0) return 0;
+    return ((precioBase - costo) / precioBase) * 100;
+  }
+
   /* OBS / CRUD */
   function toggleObservacion(index) {
     const copia = [...items];
@@ -1253,7 +1260,7 @@ export default function CrearLicitacion() {
     }
   }
 
-  function limpiarDatos() {
+  function limpiarDatos(showToast = true) {
     setIdLicitacionInput("");
     setNombre("");
     setFechaHoraCierre("");
@@ -1277,10 +1284,12 @@ export default function CrearLicitacion() {
 
     setObservaciones("");
 
-    setToast({
-      type: "success",
-      message: "Los datos fueron limpiados correctamente.",
-    });
+    if (showToast) {
+      setToast({
+        type: "success",
+        message: "Los datos fueron limpiados correctamente.",
+      });
+    }
   }
 
   /* ============================================================
@@ -1375,21 +1384,25 @@ export default function CrearLicitacion() {
         return;
       }
 
-      // ✅ Filtrar filas vacías
-      const itemsParaGuardar = (items || []).filter((it) => {
-        const sku = (it?.sku ?? "").trim();
-        const producto = (it?.producto ?? "").trim();
-        const formato = (it?.formato ?? "").trim();
-        const categoria = (it?.categoria ?? "").trim();
-        const obs = (it?.observacion ?? "").trim();
-        const cantidad = Number(it?.cantidad ?? 0);
-        const precio = Number(it?.precio ?? 0);
+      // ✅ Filtrar filas vacías (manteniendo índice original)
+      const itemsParaGuardarConIndex = (items || [])
+        .map((it, idx) => ({ it, idx }))
+        .filter(({ it }) => {
+          const sku = (it?.sku ?? "").trim();
+          const producto = (it?.producto ?? "").trim();
+          const formato = (it?.formato ?? "").trim();
+          const categoria = (it?.categoria ?? "").trim();
+          const obs = (it?.observacion ?? "").trim();
+          const cantidad = Number(it?.cantidad ?? 0);
+          const precio = Number(it?.precio ?? 0);
 
-        const tieneAlgo =
-          sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
+          const tieneAlgo =
+            sku || producto || formato || categoria || obs || cantidad > 0 || precio > 0;
 
-        return tieneAlgo;
-      });
+          return tieneAlgo;
+        });
+
+      const itemsParaGuardar = itemsParaGuardarConIndex.map(({ it }) => it);
 
       if (itemsParaGuardar.length === 0) {
         setToast({
@@ -1418,7 +1431,14 @@ export default function CrearLicitacion() {
         }
       }
 
-      const requiereAprobacion = margenGeneral < 20;
+      const lineasBajoMargen = itemsParaGuardarConIndex
+        .map(({ it, idx }) => {
+          const margen = calcularMargenItem(it);
+          return margen > 0 && margen < 20 ? idx + 1 : null;
+        })
+        .filter(Boolean);
+
+      const requiereAprobacion = lineasBajoMargen.length > 0;
 
       const { data: lic, error } = await supabase
         .from("licitaciones")
@@ -1505,11 +1525,12 @@ export default function CrearLicitacion() {
       if (requiereAprobacion) {
         setToast({
           type: "success",
-          message:
-            "Licitación guardada en estado \"Pendiente Aprobación\" (margen general < 20%).",
+          message: `Licitación pendiente de aprobación, debido a que las líneas ${lineasBajoMargen.join(
+            ", "
+          )} tienen un % de margen menor al 20%.`,
         });
         localStorage.removeItem(STORAGE_KEY);
-        limpiarDatos();
+        limpiarDatos(false);
         return;
       }
 
@@ -1974,15 +1995,23 @@ export default function CrearLicitacion() {
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-3 max-h-[900px] overflow-y-auto pr-2">
-            {items.map((it, index) => (
-              <SortableItem
-                key={it.id}
-                itemId={it.id}
-                onInsertAfter={() => insertarItemDespues(index)}
-                canInsertAfter={true}
-              >
-                {({ dragHandleProps, onInsertAfter }) => (
-                  <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3">
+            {items.map((it, index) => {
+              const margenItem = calcularMargenItem(it);
+              const isLowMargin = margenItem > 0 && margenItem < 20;
+
+              return (
+                <SortableItem
+                  key={it.id}
+                  itemId={it.id}
+                  onInsertAfter={() => insertarItemDespues(index)}
+                  canInsertAfter={true}
+                >
+                  {({ dragHandleProps, onInsertAfter }) => (
+                    <div
+                      className={`bg-white border rounded-lg p-4 shadow-sm space-y-3 ${
+                        isLowMargin ? "border-red-400 bg-red-50" : "border-gray-200"
+                      }`}
+                    >
                     <div className="grid grid-cols-1 md:grid-cols-[repeat(24,minmax(0,1fr))] gap-4 items-end">
                       <div className="md:col-span-1">
                         <label className="block text-xs text-gray-600 mb-1">
@@ -2213,9 +2242,10 @@ export default function CrearLicitacion() {
                       </div>
                     )}
                   </div>
-                )}
-              </SortableItem>
-            ))}
+                  )}
+                </SortableItem>
+              );
+            })}
           </div>
         </SortableContext>
       </DndContext>

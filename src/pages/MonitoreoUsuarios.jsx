@@ -1,10 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
+import Select from "react-select";
 import { supabase } from "../lib/supabase";
 
 const ACTIVE_GRACE_MS = 60 * 1000;
-
 // Para “online real” (evita sesiones zombie en UI)
 const HEARTBEAT_ONLINE_SEC = 30;
+
+const selectStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "36px",
+    borderColor: "#d1d5db",
+    boxShadow: "none",
+    ":hover": { borderColor: "#d1d5db" },
+  }),
+  valueContainer: (base) => ({ ...base, padding: "0 10px" }),
+  multiValue: (base) => ({ ...base, backgroundColor: "#e5e7eb" }),
+  multiValueLabel: (base) => ({ ...base, fontSize: "12px" }),
+  multiValueRemove: (base) => ({
+    ...base,
+    ":hover": { backgroundColor: "#d1d5db" },
+  }),
+  placeholder: (base) => ({ ...base, color: "#6b7280" }),
+  menuPortal: (base) => ({ ...base, zIndex: 99999 }),
+};
 
 // Si tienes RPC que cierra sesiones stale (recomendado)
 const STALE_SESSION_SEC = 45;
@@ -88,8 +107,28 @@ function workBoundsLocal(dayISO) {
   return { start, end };
 }
 
+function dayRangeISO(fromISO, toISO) {
+  if (!fromISO || !toISO) return [];
+  const start = new Date(`${fromISO}T00:00:00`);
+  const end = new Date(`${toISO}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+
+  const days = [];
+  const dir = start.getTime() <= end.getTime() ? 1 : -1;
+  const cur = new Date(start);
+
+  while (true) {
+    days.push(cur.toLocaleDateString("en-CA"));
+    if (cur.toDateString() === end.toDateString()) break;
+    cur.setDate(cur.getDate() + dir);
+  }
+
+  return dir === 1 ? days : days.reverse();
+}
+
 export default function MonitoreoUsuarios() {
-  const [fecha, setFecha] = useState(hoyLocalISO());
+  const [fechaDesde, setFechaDesde] = useState(hoyLocalISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyLocalISO());
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(Date.now());
 
@@ -106,6 +145,25 @@ export default function MonitoreoUsuarios() {
 
   // conectado del día seleccionado (segundos) dentro de 09–19 y cortando zombies con last_seen_at
   const [onlineDayMap, setOnlineDayMap] = useState(new Map()); // user_id => seconds (work window)
+
+  const [filtroVendedor, setFiltroVendedor] = useState([]);
+
+  const range = useMemo(() => {
+    const today = hoyLocalISO();
+    let from = fechaDesde || today;
+    let to = fechaHasta || from;
+    if (from > to) {
+      const tmp = from;
+      from = to;
+      to = tmp;
+    }
+    return {
+      from,
+      to,
+      days: dayRangeISO(from, to),
+      isSingleDay: from === to,
+    };
+  }, [fechaDesde, fechaHasta]);
 
   // ticker UI
   useEffect(() => {
@@ -209,7 +267,7 @@ export default function MonitoreoUsuarios() {
     };
   }, []);
 
-  // last_seen DEL DÍA seleccionado (para textos del día)
+  // last_seen DEL RANGO seleccionado (para textos)
   useEffect(() => {
     let mounted = true;
 
@@ -218,14 +276,19 @@ export default function MonitoreoUsuarios() {
         const { data, error } = await supabase
           .from("user_activity_daily")
           .select("user_id, day, last_seen_at")
-          .eq("day", fecha)
+          .gte("day", range.from)
+          .lte("day", range.to)
           .limit(5000);
 
         if (error) throw error;
 
         const m = new Map();
         (data || []).forEach((r) => {
-          if (r.user_id && r.last_seen_at) m.set(r.user_id, r.last_seen_at);
+          if (!r.user_id || !r.last_seen_at) return;
+          const prev = m.get(r.user_id);
+          if (!prev || new Date(r.last_seen_at) > new Date(prev)) {
+            m.set(r.user_id, r.last_seen_at);
+          }
         });
 
         if (mounted) setDailyLastSeenMap(m);
@@ -241,7 +304,7 @@ export default function MonitoreoUsuarios() {
       mounted = false;
       clearInterval(t);
     };
-  }, [fecha]);
+  }, [range.from, range.to]);
 
   // ✅ Conectado dentro de 09:00–19:00 (local), cortando sesiones abiertas por last_seen_at (no usar now)
   useEffect(() => {
@@ -249,9 +312,10 @@ export default function MonitoreoUsuarios() {
 
     async function cargarOnlineVentana() {
       try {
-        const { start, end } = workBoundsLocal(fecha);
-        const startIso = start.toISOString();
-        const endIso = end.toISOString();
+        const rangeStart = new Date(`${range.from}T00:00:00`);
+        const rangeEnd = new Date(`${range.to}T23:59:59`);
+        const startIso = rangeStart.toISOString();
+        const endIso = rangeEnd.toISOString();
 
         const { data, error } = await supabase
           .from("user_sessions")
@@ -281,13 +345,16 @@ export default function MonitoreoUsuarios() {
           else if (s.last_seen_at) effectiveEnd = new Date(s.last_seen_at);
           else return;
 
-          const from = new Date(Math.max(sStart.getTime(), start.getTime()));
-          const to = new Date(Math.min(effectiveEnd.getTime(), end.getTime()));
+          range.days.forEach((dayISO) => {
+            const { start, end } = workBoundsLocal(dayISO);
+            const from = new Date(Math.max(sStart.getTime(), start.getTime()));
+            const to = new Date(Math.min(effectiveEnd.getTime(), end.getTime()));
 
-          const diffSec = Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
-          if (diffSec <= 0) return;
+            const diffSec = Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
+            if (diffSec <= 0) return;
 
-          acc.set(s.user_id, (acc.get(s.user_id) || 0) + diffSec);
+            acc.set(s.user_id, (acc.get(s.user_id) || 0) + diffSec);
+          });
         });
 
         if (mounted) setOnlineDayMap(acc);
@@ -303,24 +370,30 @@ export default function MonitoreoUsuarios() {
       mounted = false;
       clearInterval(t);
     };
-  }, [fecha]);
+  }, [range.from, range.to, range.days]);
 
-  // ✅ Ventana “observable” SOLO 09:00–19:00
+  // ✅ Ventana “observable” SOLO 09:00–19:00 (rango)
   const windowSeconds = useMemo(() => {
-    const { start, end } = workBoundsLocal(fecha);
     const now = new Date();
+    let total = 0;
 
-    // futuro o antes de las 09:00 del día => 0
-    if (now.getTime() <= start.getTime()) return 0;
+    range.days.forEach((dayISO) => {
+      const { start, end } = workBoundsLocal(dayISO);
+      const dayStart = start.getTime();
+      const dayEnd = end.getTime();
+      const nowMs = now.getTime();
 
-    // día ya terminó (pasado o hoy después de 19:00) => ventana completa
-    if (now.getTime() >= end.getTime()) {
-      return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-    }
+      if (nowMs <= dayStart) return;
+      if (nowMs >= dayEnd) {
+        total += Math.max(0, Math.floor((dayEnd - dayStart) / 1000));
+        return;
+      }
 
-    // hoy dentro de la ventana => desde 09:00 hasta ahora
-    return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000));
-  }, [fecha, tick]);
+      total += Math.max(0, Math.floor((nowMs - dayStart) / 1000));
+    });
+
+    return total;
+  }, [range.days, tick]);
 
   const todayISO = hoyLocalISO();
 
@@ -396,9 +469,9 @@ export default function MonitoreoUsuarios() {
 
         // “desconectado desde” solo tiene sentido para HOY (y dentro de ventana)
         let disconnectedSinceSec = null;
-        if (fecha === todayISO && lastSeenDay) {
+        if (range.isSingleDay && range.from === todayISO && lastSeenDay) {
           const last = new Date(lastSeenDay);
-          const { start } = workBoundsLocal(fecha);
+          const { start } = workBoundsLocal(range.from);
 
           // si last_seen fue antes de las 09:00, contar desde las 09:00
           const base = last.getTime() < start.getTime() ? start : last;
@@ -416,7 +489,17 @@ export default function MonitoreoUsuarios() {
           disconnected_day_seconds: disconnected,
         };
       });
-  }, [profiles, onlineEnriched, dailyLastSeenMap, onlineDayMap, windowSeconds, fecha, todayISO, tick]);
+  }, [
+    profiles,
+    onlineEnriched,
+    dailyLastSeenMap,
+    onlineDayMap,
+    windowSeconds,
+    range.from,
+    range.isSingleDay,
+    todayISO,
+    tick,
+  ]);
 
   const offlineLastSeenText = (u) => {
     if (!u.last_seen_day) return `Última actividad (día): Sin registros`;
@@ -424,10 +507,24 @@ export default function MonitoreoUsuarios() {
   };
 
   const offlineSinceText = (u) => {
-    if (fecha !== todayISO) return offlineLastSeenText(u);
+    if (!range.isSingleDay || range.from !== todayISO) return offlineLastSeenText(u);
     if (!u.last_seen_day) return "Desconectado desde: Sin registros hoy";
     return `Desconectado desde: ${fmtHace(u.disconnected_since_seconds)}`;
   };
+
+  const vendedores = useMemo(() => {
+    return profiles.filter((p) => ["ventas", "jefe_ventas"].includes(p.rol));
+  }, [profiles]);
+
+  const onlineFiltered = useMemo(() => {
+    if (!filtroVendedor.length) return onlineEnriched;
+    return onlineEnriched.filter((u) => filtroVendedor.includes(u.user_id));
+  }, [onlineEnriched, filtroVendedor]);
+
+  const offlineFiltered = useMemo(() => {
+    if (!filtroVendedor.length) return offlineUsers;
+    return offlineUsers.filter((u) => filtroVendedor.includes(u.user_id));
+  }, [offlineUsers, filtroVendedor]);
 
   return (
     <div className="w-full">
@@ -438,17 +535,55 @@ export default function MonitoreoUsuarios() {
             🟢 Activo ≤ 60s · 🟡 Ausente &gt; 60s · 🔴 Offline
           </div>
           <div className="text-xs text-gray-400 mt-1">
-            Ventana: <span className="font-semibold">09:00–19:00</span> · Día:{" "}
-            <span className="font-semibold">{fecha}</span>
+            Ventana: <span className="font-semibold">09:00-19:00</span> � Rango:{" "}
+            <span className="font-semibold">
+              {range.from} {range.to !== range.from ? `- ${range.to}` : ""}
+            </span>
           </div>
         </div>
 
-        <input
-          type="date"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-          className="border border-gray-300 rounded-md px-4 py-2 text-sm"
-        />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Desde</label>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Hasta</label>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Vendedor</label>
+            <div className="min-w-[220px]">
+              <Select
+                isMulti
+                isClearable
+                options={vendedores.map((v) => ({
+                  value: v.id,
+                  label: v.nombre || v.email,
+                }))}
+                value={vendedores
+                  .filter((v) => filtroVendedor.includes(v.id))
+                  .map((v) => ({ value: v.id, label: v.nombre || v.email }))}
+                onChange={(vals) =>
+                  setFiltroVendedor((vals || []).map((v) => v.value))
+                }
+                placeholder="Todos"
+                styles={selectStyles}
+                menuPortalTarget={document.body}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -458,14 +593,14 @@ export default function MonitoreoUsuarios() {
           {/* ONLINE */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
             <div className="text-lg font-semibold text-gray-900 mb-4">
-              En línea (Presence) <span className="text-gray-500">({onlineEnriched.length})</span>
+              En línea (Presence) <span className="text-gray-500">({onlineFiltered.length})</span>
             </div>
 
-            {onlineEnriched.length === 0 ? (
+            {onlineFiltered.length === 0 ? (
               <div className="text-gray-500">No hay usuarios en línea.</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {onlineEnriched.map((u) => (
+                {onlineFiltered.map((u) => (
                   <div key={u.user_id} className="py-4 flex items-start justify-between gap-6">
                     <div className="min-w-0">
                       <div className="flex items-center gap-3">
@@ -500,14 +635,14 @@ export default function MonitoreoUsuarios() {
           {/* OFFLINE */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
             <div className="text-lg font-semibold text-gray-900 mb-4">
-              Fuera de línea <span className="text-gray-500">({offlineUsers.length})</span>
+              Fuera de línea <span className="text-gray-500">({offlineFiltered.length})</span>
             </div>
 
-            {offlineUsers.length === 0 ? (
+            {offlineFiltered.length === 0 ? (
               <div className="text-gray-500">Todos están conectados.</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {offlineUsers.map((u) => (
+                {offlineFiltered.map((u) => (
                   <div key={u.user_id} className="py-4 flex items-start justify-between gap-6">
                     <div className="min-w-0">
                       <div className="flex items-center gap-3">
@@ -542,3 +677,16 @@ export default function MonitoreoUsuarios() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

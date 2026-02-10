@@ -1949,7 +1949,7 @@ export default function EditarLicitacion() {
         })
         .filter(Boolean);
 
-      const requiereAprobacion = lineasBajoMargen.length > 0;
+      const requiereAprobacion = margenGeneral < 20;
       const estadoFinal = requiereAprobacion ? "Pendiente Aprobación" : estado;
 
       if (estadoFinal !== estado) {
@@ -1996,11 +1996,12 @@ export default function EditarLicitacion() {
       }
 
       if (requiereAprobacion) {
+        const detalleLineas = lineasBajoMargen.length
+          ? ` Las líneas ${lineasBajoMargen.join(", ")} tienen un % de margen menor al 20%.`
+          : "";
         setToast({
           type: "success",
-          message: `Licitación pendiente de aprobación, debido a que las líneas ${lineasBajoMargen.join(
-            ", "
-          )} tienen un % de margen menor al 20%.`,
+          message: `Licitación pendiente de aprobación porque el margen general es inferior al 20%.${detalleLineas}`,
         });
       }
 

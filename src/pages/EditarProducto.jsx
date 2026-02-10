@@ -151,6 +151,11 @@ export default function EditarProducto() {
     modo_uso: "",
     almacenamiento: "",
     datos_clave: "",
+    peso: 0,
+    alto: 0,
+    largo: 0,
+    ancho: 0,
+    metro_cubico: 0,
     costo: 0,
     lista1: 0,
     lista2: 0,
@@ -183,6 +188,14 @@ export default function EditarProducto() {
     () => rolNorm === "admin" || rolNorm === "administrador",
     [rolNorm]
   );
+
+  const metroCubico = useMemo(() => {
+    const a = Number(producto.alto) || 0;
+    const l = Number(producto.largo) || 0;
+    const an = Number(producto.ancho) || 0;
+    if (!a || !l || !an) return "";
+    return ((a * l * an) / 1_000_000).toFixed(6);
+  }, [producto.alto, producto.largo, producto.ancho]);
 
   // 1) ✅ ventas NO debe editar productos
   const puedeEditarProducto = useMemo(() => rolNorm !== "ventas", [rolNorm]);
@@ -261,6 +274,11 @@ export default function EditarProducto() {
         modo_uso: data.modo_uso ?? "",
         almacenamiento: data.almacenamiento ?? "",
         datos_clave: data.datos_clave ?? "",
+        peso: data.peso ?? 0,
+        alto: data.alto ?? 0,
+        largo: data.largo ?? 0,
+        ancho: data.ancho ?? 0,
+        metro_cubico: data.metro_cubico ?? 0,
         costo: data.costo ?? 0,
         lista1: data.lista1 ?? 0,
         lista2: data.lista2 ?? 0,
@@ -565,6 +583,11 @@ export default function EditarProducto() {
       modo_uso: producto.modo_uso,
       almacenamiento: producto.almacenamiento,
       datos_clave: producto.datos_clave,
+      peso: Number(producto.peso) || 0,
+      alto: Number(producto.alto) || 0,
+      largo: Number(producto.largo) || 0,
+      ancho: Number(producto.ancho) || 0,
+      metro_cubico: Number(metroCubico) || 0,
       lista1: Number(producto.lista1) || 0,
       lista2: Number(producto.lista2) || 0,
     };
@@ -622,6 +645,11 @@ export default function EditarProducto() {
       modo_uso: data.modo_uso ?? "",
       almacenamiento: data.almacenamiento ?? "",
       datos_clave: data.datos_clave ?? "",
+      peso: data.peso ?? 0,
+      alto: data.alto ?? 0,
+      largo: data.largo ?? 0,
+      ancho: data.ancho ?? 0,
+      metro_cubico: data.metro_cubico ?? 0,
     };
   }
 
@@ -1228,6 +1256,85 @@ export default function EditarProducto() {
                       datos_clave: e.target.value,
                     }))
                   }
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+              Dimensiones y Peso
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className={inputClass}
+                  value={producto.peso}
+                  onChange={(e) =>
+                    setProducto((prev) => ({ ...prev, peso: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Alto (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputClass}
+                  value={producto.alto}
+                  onChange={(e) =>
+                    setProducto((prev) => ({ ...prev, alto: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Largo (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputClass}
+                  value={producto.largo}
+                  onChange={(e) =>
+                    setProducto((prev) => ({ ...prev, largo: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Ancho (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputClass}
+                  value={producto.ancho}
+                  onChange={(e) =>
+                    setProducto((prev) => ({ ...prev, ancho: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Metro cúbico (m³)
+                </label>
+                <input
+                  readOnly
+                  className={inputReadOnlyClass}
+                  value={metroCubico}
                 />
               </div>
             </div>

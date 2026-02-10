@@ -141,6 +141,10 @@ export default function CrearProducto() {
   const [modoUso, setModoUso] = useState("");
   const [almacenamiento, setAlmacenamiento] = useState("");
   const [datosClave, setDatosClave] = useState("");
+  const [peso, setPeso] = useState("");
+  const [alto, setAlto] = useState("");
+  const [largo, setLargo] = useState("");
+  const [ancho, setAncho] = useState("");
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState("");
 
@@ -201,6 +205,14 @@ export default function CrearProducto() {
     return rol === "admin" || rol === "Administrador";
   }, [rol]);
   const esAdmin = puedeIngresarSKU;
+
+  const metroCubico = useMemo(() => {
+    const a = Number(alto) || 0;
+    const l = Number(largo) || 0;
+    const an = Number(ancho) || 0;
+    if (!a || !l || !an) return "";
+    return ((a * l * an) / 1_000_000).toFixed(6);
+  }, [alto, largo, ancho]);
 
   useEffect(() => {
     if (!imagenFile) {
@@ -297,6 +309,11 @@ export default function CrearProducto() {
       modo_uso: modoUso,
       almacenamiento,
       datos_clave: datosClave,
+      peso: Number(peso) || 0,
+      alto: Number(alto) || 0,
+      largo: Number(largo) || 0,
+      ancho: Number(ancho) || 0,
+      metro_cubico: Number(metroCubico) || 0,
       lista1: Number(precios.lista1) || 0,
       lista2: Number(precios.lista2) || 0,
       lista3: 0,
@@ -338,6 +355,10 @@ export default function CrearProducto() {
     setModoUso("");
     setAlmacenamiento("");
     setDatosClave("");
+    setPeso("");
+    setAlto("");
+    setLargo("");
+    setAncho("");
     setImagenFile(null);
     setPrecios({ lista1: "", lista2: "", lista3: "", lista4: "" });
   }
@@ -614,6 +635,78 @@ export default function CrearProducto() {
                   className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
                   value={datosClave}
                   onChange={(e) => setDatosClave(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* DIMENSIONES */}
+          <div className="md:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+              Dimensiones y Peso
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={peso}
+                  onChange={(e) => setPeso(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Alto (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={alto}
+                  onChange={(e) => setAlto(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Largo (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={largo}
+                  onChange={(e) => setLargo(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Ancho (cm)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2"
+                  value={ancho}
+                  onChange={(e) => setAncho(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Metro cúbico (m³)
+                </label>
+                <input
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
+                  value={metroCubico}
                 />
               </div>
             </div>

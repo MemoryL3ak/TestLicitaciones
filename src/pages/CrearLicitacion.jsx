@@ -1438,7 +1438,7 @@ export default function CrearLicitacion() {
         })
         .filter(Boolean);
 
-      const requiereAprobacion = lineasBajoMargen.length > 0;
+      const requiereAprobacion = margenGeneral < 20;
 
       const { data: lic, error } = await supabase
         .from("licitaciones")
@@ -1523,11 +1523,12 @@ export default function CrearLicitacion() {
       }
 
       if (requiereAprobacion) {
+        const detalleLineas = lineasBajoMargen.length
+          ? ` Las líneas ${lineasBajoMargen.join(", ")} tienen un % de margen menor al 20%.`
+          : "";
         setToast({
           type: "success",
-          message: `Licitación pendiente de aprobación, debido a que las líneas ${lineasBajoMargen.join(
-            ", "
-          )} tienen un % de margen menor al 20%.`,
+          message: `Licitación pendiente de aprobación porque el margen general es inferior al 20%.${detalleLineas}`,
         });
         localStorage.removeItem(STORAGE_KEY);
         limpiarDatos(false);

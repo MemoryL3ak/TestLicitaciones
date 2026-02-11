@@ -861,6 +861,7 @@ export default function CrearLicitacion() {
       const { data } = await supabase
         .from("productos")
         .select("*")
+        .in("estado", ["Activo", "Transitorio"])
         .order("id")
         .limit(20000);
 

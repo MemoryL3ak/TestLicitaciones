@@ -200,11 +200,21 @@ export default function CrearProducto() {
     };
   }, []);
 
+  const rolNorm = useMemo(() => (rol ?? "").toString().trim().toLowerCase(), [rol]);
   // ✅ En tu DB el rol suele ser "admin" (y por compatibilidad también "Administrador")
   const puedeIngresarSKU = useMemo(() => {
     return rol === "admin" || rol === "Administrador";
   }, [rol]);
   const esAdmin = puedeIngresarSKU;
+  const esVentasOJefe = useMemo(
+    () => rolNorm === "ventas" || rolNorm === "jefe_ventas",
+    [rolNorm]
+  );
+  const esTransitorio = (sku ?? "").toString().trim() === "";
+  const mostrarMargen =
+    !esVentasOJefe || esTransitorio || esPendienteAprobacion;
+  const puedeVerCosto =
+    esAdmin || (esVentasOJefe && (esTransitorio || esPendienteAprobacion));
 
   const metroCubico = useMemo(() => {
     const a = Number(alto) || 0;
@@ -213,6 +223,28 @@ export default function CrearProducto() {
     if (!a || !l || !an) return "";
     return ((a * l * an) / 1_000_000).toFixed(6);
   }, [alto, largo, ancho]);
+
+  const margenVenta = useMemo(() => {
+    const precioVenta = Number(precios.lista1) || 0;
+    const costoNum = Number(costo) || 0;
+    if (precioVenta <= 0) return "0.00%";
+    const margen = ((precioVenta - costoNum) / precioVenta) * 100;
+    return `${margen.toFixed(2)}%`;
+  }, [precios.lista1, costo]);
+
+  const margenVentaNum = useMemo(() => {
+    const precioVenta = Number(precios.lista1) || 0;
+    const costoNum = Number(costo) || 0;
+    if (precioVenta <= 0) return 0;
+    return ((precioVenta - costoNum) / precioVenta) * 100;
+  }, [precios.lista1, costo]);
+
+  const estadoMostrado = useMemo(() => {
+    if (sku.trim()) return "Activo";
+    return estado || "Transitorio";
+  }, [sku, estado]);
+
+  const esPendienteAprobacion = estadoMostrado === "Pendiente Aprobación";
 
   useEffect(() => {
     if (!imagenFile) {
@@ -258,7 +290,10 @@ export default function CrearProducto() {
     setToast(null);
 
     const skuLimpio = (sku ?? "").toString().trim().toUpperCase();
-    const estadoFinal = skuLimpio ? "Activo" : "Transitorio";
+    let estadoFinal = skuLimpio ? "Activo" : "Transitorio";
+    if (!skuLimpio && margenVentaNum > 0 && margenVentaNum < 15) {
+      estadoFinal = "Pendiente Aprobación";
+    }
 
     const missing = [];
     if (!(nombre ?? "").toString().trim()) missing.push("Nombre del Producto");
@@ -320,7 +355,7 @@ export default function CrearProducto() {
       lista4: 0,
     };
 
-    if (esAdmin) {
+    if (puedeVerCosto) {
       payload.costo = Number(costo) || 0;
     }
 
@@ -335,13 +370,21 @@ export default function CrearProducto() {
       return;
     }
 
-    setToast({
-      type: "success",
-      message: "Producto creado con éxito",
-    });
+    if (estadoFinal === "Pendiente Aprobación") {
+      setToast({
+        type: "warning",
+        message:
+          "Producto creado en estado \"Pendiente Aprobación\" (margen < 15%).",
+      });
+    } else {
+      setToast({
+        type: "success",
+        message: "Producto creado con éxito",
+      });
+    }
 
     setSku("");
-    setEstado("Transitorio");
+    setEstado(estadoFinal);
     setNombre("");
     setMarca("");
     setCategoria("");
@@ -400,10 +443,19 @@ export default function CrearProducto() {
                       Estado
                     </label>
                     <input
-                      className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
-                      value={sku.trim() ? "Activo" : "Transitorio"}
+                      className={`w-full rounded-md border px-3 py-2 ${
+                        esPendienteAprobacion
+                          ? "border-orange-400 bg-orange-50 text-orange-900"
+                          : "border-gray-300 bg-gray-100"
+                      }`}
+                      value={estadoMostrado}
                       readOnly
                     />
+                    {esPendienteAprobacion && (
+                      <p className="text-xs text-orange-700 mt-1">
+                        Requiere aprobación de admin (margen &lt; 15%).
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -719,7 +771,7 @@ export default function CrearProducto() {
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {esAdmin && (
+              {puedeVerCosto && (
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
                     Costo
@@ -733,11 +785,13 @@ export default function CrearProducto() {
                 </div>
               )}
 
-              {["lista1", "lista2"].map((list) => (
+              {(esVentasOJefe ? ["lista1"] : ["lista1", "lista2"]).map((list) => (
                 <div key={list}>
                   <label className="block text-sm text-gray-600 mb-1">
                     {list === "lista1"
-                      ? "Listado de Precios 1"
+                      ? esVentasOJefe
+                        ? "Precio Venta Neto"
+                        : "Listado de Precios 1"
                       : "Listado de Precios 2"}
                   </label>
                   <input
@@ -748,6 +802,19 @@ export default function CrearProducto() {
                   />
                 </div>
               ))}
+
+              {mostrarMargen && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Margen
+                  </label>
+                  <input
+                    readOnly
+                    className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2"
+                    value={margenVenta}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

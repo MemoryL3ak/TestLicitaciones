@@ -726,7 +726,7 @@ export default function EditarLicitacion() {
   /* ============================================================
      ✅ REGLA DE EDICIÓN + ESTILOS GRIS (disabled)
 ============================================================ */
-  const esEditable = estado === "En espera";
+  const esEditable = estado === "En espera" || estado === "Pendiente Aprobación";
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-3 py-2 " +
@@ -1310,6 +1310,7 @@ export default function EditarLicitacion() {
       const { data } = await supabase
         .from("productos")
         .select("*")
+        .in("estado", ["Activo", "Transitorio"])
         .order("id")
         .limit(20000);
 
@@ -2905,18 +2906,18 @@ export default function EditarLicitacion() {
           Guardar Cambios
         </button>
 
-        <button
-          onClick={exportarPDF}
-          className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
-            guardando || generandoPDF || estado === "Pendiente Aprobación"
-              ? btnDisabled
-              : "cursor-pointer"
-          }`}
-          type="button"
-          disabled={guardando || generandoPDF || estado === "Pendiente Aprobación"}
-        >
-          Generar PDF
-        </button>
+        {estado !== "Pendiente Aprobación" && (
+          <button
+            onClick={exportarPDF}
+            className={`bg-[#4b89ac] text-white px-6 py-2 rounded-md shadow hover:bg-[#3f7897] ${
+              guardando || generandoPDF ? btnDisabled : "cursor-pointer"
+            }`}
+            type="button"
+            disabled={guardando || generandoPDF}
+          >
+            Generar PDF
+          </button>
+        )}
 
         {esAdmin && (
           <button

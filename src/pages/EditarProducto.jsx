@@ -129,6 +129,7 @@ export default function EditarProducto() {
 
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [guardando, setGuardando] = useState(false);
 
   const [rol, setRol] = useState(null);
 
@@ -197,6 +198,21 @@ export default function EditarProducto() {
     return ((a * l * an) / 1_000_000).toFixed(6);
   }, [producto.alto, producto.largo, producto.ancho]);
 
+  const margenVenta = useMemo(() => {
+    const precioVenta = Number(producto.lista1) || 0;
+    const costoNum = Number(producto.costo) || 0;
+    if (precioVenta <= 0) return "0.00%";
+    const margen = ((precioVenta - costoNum) / precioVenta) * 100;
+    return `${margen.toFixed(2)}%`;
+  }, [producto.lista1, producto.costo]);
+
+  const margenVentaNum = useMemo(() => {
+    const precioVenta = Number(producto.lista1) || 0;
+    const costoNum = Number(producto.costo) || 0;
+    if (precioVenta <= 0) return 0;
+    return ((precioVenta - costoNum) / precioVenta) * 100;
+  }, [producto.lista1, producto.costo]);
+
   // 1) ✅ ventas NO debe editar productos
   const puedeEditarProducto = useMemo(() => rolNorm !== "ventas", [rolNorm]);
 
@@ -211,6 +227,13 @@ export default function EditarProducto() {
     const sku = (producto?.sku ?? "").toString().trim();
     return sku === "";
   }, [producto]);
+
+  const estadoMostrado =
+    producto.estado ||
+    ((producto.sku ?? "").toString().trim() ? "Activo" : "Transitorio");
+  const esPendienteAprobacion = estadoMostrado === "Pendiente Aprobación";
+  const mostrarMargen =
+    !esVentasOJefe || esProductoTransitorio || esPendienteAprobacion;
 
   // 2) ✅ admin puede editar SKU (acepta "admin" y "administrador")
   const puedeEditarSKU = esAdmin;
@@ -554,7 +577,10 @@ export default function EditarProducto() {
     skuFinal = (skuFinal ?? "").toString().trim();
     skuFinal = skuFinal.length ? skuFinal : null;
 
-    const estadoFinal = skuFinal ? "Activo" : "Transitorio";
+    let estadoFinal = skuFinal ? "Activo" : "Transitorio";
+    if (producto.estado === "Pendiente Aprobación" && !esAdmin) {
+      estadoFinal = "Pendiente Aprobación";
+    }
 
     let imagenUrl = producto.imagen_url || "";
     if (imagenFile) {
@@ -592,7 +618,7 @@ export default function EditarProducto() {
       lista2: Number(producto.lista2) || 0,
     };
 
-    if (esAdmin) {
+    if (esAdmin || (esVentasOJefe && (esProductoTransitorio || esPendienteAprobacion))) {
       payload.costo = Number(producto.costo) || 0;
     }
 
@@ -616,6 +642,32 @@ export default function EditarProducto() {
     }));
 
     setToast({ type: "success", message: "Producto actualizado" });
+  }
+
+  async function aprobarProducto() {
+    if (!esAdmin) return;
+    if (guardando) return;
+    if (producto.estado !== "Pendiente Aprobación") return;
+
+    setToast(null);
+    setGuardando(true);
+
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({ estado: "Transitorio" })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setProducto((prev) => ({ ...prev, estado: "Transitorio" }));
+      setToast({ type: "success", message: "Producto aprobado." });
+    } catch (e) {
+      console.error(e);
+      setToast({ type: "error", message: "No se pudo aprobar el producto." });
+    } finally {
+      setGuardando(false);
+    }
   }
 
     
@@ -951,16 +1003,29 @@ export default function EditarProducto() {
         />
       )}
 
-      <h1 className="text-3xl font-semibold text-gray-900 mb-6">
-        Editar Producto
-      </h1>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h1 className="text-3xl font-semibold text-gray-900">
+            Editar Producto
+          </h1>
+          <Link
+            to="/productos"
+            className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
+          >
+            ← Volver al listado
+          </Link>
+        </div>
 
-      <Link
-        to="/productos"
-        className="text-blue-600 hover:text-blue-800 text-sm mb-4 block"
-      >
-        ← Volver al listado
-      </Link>
+        {esAdmin && producto.estado === "Pendiente Aprobación" && (
+          <button
+            type="button"
+            onClick={aprobarProducto}
+            className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700 transition-colors text-sm"
+          >
+            Aprobar Producto
+          </button>
+        )}
+      </div>
 
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -977,10 +1042,19 @@ export default function EditarProducto() {
                       Estado
                     </label>
                     <input
-                      className={inputReadOnlyClass}
-                      value={(producto.sku ?? "").toString().trim() ? "Activo" : "Transitorio"}
+                      className={
+                        esPendienteAprobacion
+                          ? "w-full rounded-md border border-orange-400 bg-orange-50 px-3 py-2 text-orange-900"
+                          : inputReadOnlyClass
+                      }
+                      value={estadoMostrado}
                       readOnly
                     />
+                    {esPendienteAprobacion && (
+                      <p className="text-xs text-orange-700 mt-1">
+                        Requiere aprobación de admin (margen &lt; 15%).
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1346,7 +1420,9 @@ export default function EditarProducto() {
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(esAdmin || (esVentasOJefe && esProductoTransitorio)) && (
+              {(esAdmin ||
+                (esVentasOJefe &&
+                  (esProductoTransitorio || esPendienteAprobacion))) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Costo
@@ -1362,11 +1438,13 @@ export default function EditarProducto() {
                 </div>
               )}
 
-              {["lista1", "lista2"].map((list) => (
+              {(esVentasOJefe ? ["lista1"] : ["lista1", "lista2"]).map((list) => (
                 <div key={list}>
                   <label className="block text-sm text-gray-600 mb-1">
                     {list === "lista1"
-                      ? "Listado de Precios 1"
+                      ? esVentasOJefe
+                        ? "Precio Venta Neto"
+                        : "Listado de Precios 1"
                       : "Listado de Precios 2"}
                   </label>
                   <input
@@ -1382,6 +1460,19 @@ export default function EditarProducto() {
                   />
                 </div>
               ))}
+
+              {mostrarMargen && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Margen
+                  </label>
+                  <input
+                    readOnly
+                    className={inputReadOnlyClass}
+                    value={margenVenta}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

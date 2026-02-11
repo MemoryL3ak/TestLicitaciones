@@ -17,16 +17,21 @@ export default function ListarLicitaciones() {
   const [filtroIdLicitacion, setFiltroIdLicitacion] = useState("");
   const [filtroComuna, setFiltroComuna] = useState("");
   const [filtroCreadores, setFiltroCreadores] = useState([]); // values internos: emails
-  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState([]);
 
   // Dropdown multi-select (Opción B)
   const [openCreadores, setOpenCreadores] = useState(false);
+  const [openEstados, setOpenEstados] = useState(false);
   const creadoresRef = useRef(null);
+  const estadosRef = useRef(null);
 
   useEffect(() => {
     const onClickOutside = (e) => {
       if (creadoresRef.current && !creadoresRef.current.contains(e.target)) {
         setOpenCreadores(false);
+      }
+      if (estadosRef.current && !estadosRef.current.contains(e.target)) {
+        setOpenEstados(false);
       }
     };
     document.addEventListener("mousedown", onClickOutside);
@@ -167,7 +172,8 @@ export default function ListarLicitaciones() {
         ? filtroCreadores.includes(creadoPorEmail)
         : true;
 
-    const estadoOK = filtroEstado ? estado === filtroEstado : true;
+    const estadoOK =
+      filtroEstado.length > 0 ? filtroEstado.includes(estado) : true;
 
     return (
       desdeOK &&
@@ -178,6 +184,37 @@ export default function ListarLicitaciones() {
       estadoOK
     );
   });
+
+  const resumenPorVendedor = useMemo(() => {
+    const acc = new Map();
+    dataFiltrada.forEach((l) => {
+      const email = (l.creado_por || "").trim().toLowerCase();
+      if (!email) return;
+      acc.set(email, (acc.get(email) || 0) + 1);
+    });
+
+    return Array.from(acc.entries())
+      .map(([email, count]) => ({
+        email,
+        nombre: (usuariosMap[email] || "").trim() || "Sin nombre",
+        count,
+      }))
+      .sort((a, b) => b.count - a.count || a.nombre.localeCompare(b.nombre));
+  }, [dataFiltrada, usuariosMap]);
+
+  const opcionesEstado = [
+    "En espera",
+    "Adjudicada",
+    "Perdida",
+    "Desierta",
+    "Descartada",
+    "Pendiente Aprobación",
+  ];
+
+  const textoEstados = useMemo(() => {
+    if (filtroEstado.length === 0) return "Todos";
+    return filtroEstado.join(", ");
+  }, [filtroEstado]);
 
   // ----------------------------------------------------------------
   // EXPORTAR XLSX (sin correos)
@@ -296,7 +333,7 @@ export default function ListarLicitaciones() {
                       setFiltroCreadores(opcionesCreadores.map((o) => o.value))
                     }
                   >
-                    Seleccionar todos
+                    Todos
                   </button>
                   <button
                     type="button"
@@ -339,23 +376,93 @@ export default function ListarLicitaciones() {
             )}
           </div>
 
-          <div>
+          <div ref={estadosRef} className="relative">
             <label className="text-sm font-semibold text-gray-700">Estado</label>
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50"
+            <button
+              type="button"
+              onClick={() => setOpenEstados((v) => !v)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50 text-left flex items-center justify-between text-base leading-6"
             >
-              <option value="">Todos</option>
-              <option>En espera</option>
-              <option>Adjudicada</option>
-              <option>Perdida</option>
-              <option>Desierta</option>
-              <option>Descartada</option>
-            </select>
+              <span className="truncate">{textoEstados}</span>
+              <span className="text-gray-500">▾</span>
+            </button>
+
+            {openEstados && (
+              <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-64 overflow-auto">
+                <div className="p-2 border-b border-gray-100 flex gap-2">
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                    onClick={() => setFiltroEstado([...opcionesEstado])}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                    onClick={() => setFiltroEstado([])}
+                  >
+                    Limpiar
+                  </button>
+                </div>
+
+                <ul className="p-2 space-y-1">
+                  {opcionesEstado.map((op) => {
+                    const checked = filtroEstado.includes(op);
+                    return (
+                      <li key={op}>
+                        <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFiltroEstado((prev) => [...prev, op]);
+                              } else {
+                                setFiltroEstado((prev) =>
+                                  prev.filter((x) => x !== op)
+                                );
+                              }
+                            }}
+                          />
+                          <span className="text-base leading-6 text-gray-800">
+                            {op}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {(rol === "admin" || rol === "jefe_ventas") && (
+        <div className="bg-white border border-gray-300/40 rounded-xl p-4 mb-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">
+            Cantidad de licitaciones por vendedor (según filtros)
+          </h2>
+          {resumenPorVendedor.length === 0 ? (
+            <div className="text-sm text-gray-500">
+              No hay licitaciones para el rango seleccionado.
+            </div>
+          ) : (
+            <ul className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {resumenPorVendedor.map((r) => (
+                <li
+                  key={r.email}
+                  className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm"
+                >
+                  <span className="truncate">{r.nombre}</span>
+                  <span className="font-semibold text-gray-700">{r.count}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* -----------------------------------------------------------
           EXPORTAR
@@ -461,3 +568,4 @@ export default function ListarLicitaciones() {
     </div>
   );
 }
+

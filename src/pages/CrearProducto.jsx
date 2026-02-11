@@ -278,8 +278,8 @@ export default function CrearProducto() {
       return;
     }
 
-    // ✅ Solo admin puede enviar sku; el resto lo manda null
-    const skuPermitido = puedeIngresarSKU ? skuLimpio : null;
+    // ✅ Solo admin puede enviar sku; si está vacío => null (evita constraint)
+    const skuPermitido = puedeIngresarSKU && skuLimpio ? skuLimpio : null;
 
     let imagenUrl = "";
     try {

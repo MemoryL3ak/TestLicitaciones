@@ -1950,7 +1950,8 @@ export default function EditarLicitacion() {
         .filter(Boolean);
 
       const requiereAprobacion = margenGeneral < 20;
-      const estadoFinal = requiereAprobacion ? "Pendiente Aprobación" : estado;
+      const estadoFinal =
+        requiereAprobacion && estado !== "En espera" ? "Pendiente Aprobación" : estado;
 
       if (estadoFinal !== estado) {
         setEstado(estadoFinal);

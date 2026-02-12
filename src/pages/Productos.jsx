@@ -68,9 +68,19 @@ export default function Productos() {
     cargarPerfil();
   }, []);
 
-  // ✅ Ventas NO puede editar (ni eliminar)
-  const puedeEditarProductos = useMemo(() => {
-    return rol !== "ventas"; // ventas bloqueado; admin/jefe_ventas/etc permitido
+  // ? Ventas: puede editar solo transitorios; no puede eliminar
+  const puedeEditarProductoFila = useMemo(() => {
+    return (producto) => {
+      if (rol !== "ventas") return true;
+      const estado = (producto?.estado ?? "").toString().trim().toLowerCase();
+      if (estado) return estado === "transitorio" || estado === "transsitorio";
+      const sku = (producto?.sku ?? "").toString().trim();
+      return sku === "";
+    };
+  }, [rol]);
+
+  const puedeEliminarProductos = useMemo(() => {
+    return rol !== "ventas";
   }, [rol]);
 
   /* ============================================================
@@ -199,14 +209,14 @@ export default function Productos() {
      ELIMINACIÓN
   ============================================================ */
   function solicitarEliminacion(producto) {
-    if (!puedeEditarProductos) return;
+    if (!puedeEliminarProductos) return;
     setProductoAEliminar(producto);
     setModalOpen(true);
   }
 
   async function eliminarDefinitivo() {
     if (!productoAEliminar) return;
-    if (!puedeEditarProductos) return;
+    if (!puedeEliminarProductos) return;
 
     await supabase.from("productos").delete().eq("id", productoAEliminar.id);
     setModalOpen(false);
@@ -352,7 +362,7 @@ export default function Productos() {
 
                   <td className="px-6 py-3">
                     <div className="flex gap-2">
-                      {puedeEditarProductos ? (
+                      {puedeEditarProductoFila(p) ? (
                         <>
                           <Link
                             to={`/productos/editar/${p.id}`}
@@ -360,12 +370,23 @@ export default function Productos() {
                           >
                             Editar
                           </Link>
+                          {puedeEliminarProductos ? (
                           <button
                             onClick={() => solicitarEliminacion(p)}
                             className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
                           >
                             Eliminar
                           </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="px-3 py-1 text-sm bg-gray-300 text-gray-600 rounded-md cursor-not-allowed"
+                            title="Tu rol no permite eliminar productos"
+                            disabled
+                          >
+                            Eliminar
+                          </button>
+                        )}
                         </>
                       ) : (
                         <>
@@ -417,3 +438,6 @@ export default function Productos() {
     </div>
   );
 }
+
+
+

@@ -214,19 +214,23 @@ export default function EditarProducto() {
   }, [producto.lista1, producto.costo]);
 
   // 1) ✅ ventas NO debe editar productos
-  const puedeEditarProducto = useMemo(() => rolNorm !== "ventas", [rolNorm]);
-
-  const esVentasOJefe = useMemo(
+    const esVentasOJefe = useMemo(
     () => rolNorm === "ventas" || rolNorm === "jefe_ventas",
     [rolNorm]
   );
 
   const esProductoTransitorio = useMemo(() => {
     const estado = (producto?.estado ?? "").toString().trim().toLowerCase();
-    if (estado) return estado === "transitorio";
+    if (estado) return estado === "transitorio" || estado === "transsitorio";
     const sku = (producto?.sku ?? "").toString().trim();
     return sku === "";
   }, [producto]);
+
+  const puedeEditarProducto = useMemo(() => {
+    if (!rolNorm) return false;
+    if (rolNorm === "ventas") return esProductoTransitorio;
+    return true;
+  }, [rolNorm, esProductoTransitorio]);
 
   const estadoMostrado =
     producto.estado ||
@@ -975,7 +979,9 @@ export default function EditarProducto() {
             Acceso restringido
           </h1>
           <p className="text-sm text-gray-700">
-            Tu rol no permite editar productos.
+            {rolNorm === "ventas"
+              ? "El rol ventas solo puede editar productos en estado Transitorio."
+              : "Tu rol no permite editar productos."}
           </p>
           <p className="text-xs text-gray-500 mt-2">
             Rol detectado: <b>{rol ?? "sin rol"}</b>
@@ -1497,6 +1503,9 @@ export default function EditarProducto() {
     </div>
   );
 }
+
+
+
 
 
 

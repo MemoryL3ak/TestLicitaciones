@@ -239,8 +239,8 @@ export default function EditarProducto() {
   const mostrarMargen =
     !esVentasOJefe || esProductoTransitorio || esPendienteAprobacion;
 
-  // 2) ✅ admin puede editar SKU (acepta "admin" y "administrador")
-  const puedeEditarSKU = esAdmin;
+  // 2) ✅ admin y jefe_ventas pueden editar SKU
+  const puedeEditarSKU = esAdmin || rolNorm === "jefe_ventas";
 
   useEffect(() => {
     async function obtenerRol() {
@@ -1081,7 +1081,7 @@ export default function EditarProducto() {
                     />
                     {!puedeEditarSKU && (
                       <p className="text-xs text-red-600 mt-1">
-                        Solo el rol admin puede editar el SKU.
+                        Solo admin o jefe de ventas puede editar el SKU.
                       </p>
                     )}
                   </div>

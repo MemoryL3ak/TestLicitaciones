@@ -41,6 +41,20 @@ export default function Productos() {
   // ✅ PERFIL / ROL
   const [perfilLoading, setPerfilLoading] = useState(true);
   const [rol, setRol] = useState(null);
+  const rolNorm = useMemo(() => {
+    const r = (rol ?? "").toString().trim().toLowerCase();
+    if (!r) return "";
+    if (
+      r === "jefe_ventas" ||
+      r === "jefe ventas" ||
+      r === "jefe-ventas" ||
+      r === "jefe de ventas"
+    ) {
+      return "jefe_ventas";
+    }
+    if (r === "ventas") return "ventas";
+    return r;
+  }, [rol]);
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -71,17 +85,17 @@ export default function Productos() {
   // ? Ventas: puede editar solo transitorios; no puede eliminar
   const puedeEditarProductoFila = useMemo(() => {
     return (producto) => {
-      if (rol !== "ventas") return true;
+      if (rolNorm !== "ventas") return true;
       const estado = (producto?.estado ?? "").toString().trim().toLowerCase();
       if (estado) return estado === "transitorio" || estado === "transsitorio";
       const sku = (producto?.sku ?? "").toString().trim();
       return sku === "";
     };
-  }, [rol]);
+  }, [rolNorm]);
 
   const puedeEliminarProductos = useMemo(() => {
-    return rol !== "ventas";
-  }, [rol]);
+    return rolNorm !== "ventas";
+  }, [rolNorm]);
 
   /* ============================================================
      CARGAR PRODUCTOS

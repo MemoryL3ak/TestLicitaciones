@@ -78,6 +78,7 @@ export default function SidebarLayout() {
   }
 
   const esAdmin = perfil?.rol === "admin";
+  const puedeVerVentas = (perfil?.rol || "").toString().trim().toLowerCase() === "admin";
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -94,7 +95,7 @@ export default function SidebarLayout() {
                 "/crear"
               )}`}
             >
-              Crear Licitación
+              Crear Cotización
             </Link>
 
             <Link
@@ -104,7 +105,7 @@ export default function SidebarLayout() {
                 "/listar"
               )}`}
             >
-              Ver Licitaciones
+              Ver Cotizaciones
             </Link>
 
             <Link
@@ -136,6 +137,18 @@ export default function SidebarLayout() {
             >
               Campañas
             </Link>
+
+            {puedeVerVentas && (
+              <Link
+                to="/ventas"
+                onClick={(e) => onNavClick(e, "/ventas")}
+                className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
+                  "/ventas"
+                )}`}
+              >
+                Ventas
+              </Link>
+            )}
 
             {esAdmin && (
               <Link

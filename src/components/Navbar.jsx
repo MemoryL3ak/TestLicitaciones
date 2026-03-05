@@ -16,8 +16,8 @@ export default function Navbar() {
         
         {/* LEFT SIDE: LINKS */}
         <div className="flex gap-6 text-sm font-medium text-gray-700">
-          <Link className="hover:text-gray-900 transition" to="/crear">Crear Licitación</Link>
-          <Link className="hover:text-gray-900 transition" to="/listar">Ver Licitaciones</Link>
+          <Link className="hover:text-gray-900 transition" to="/crear">Crear Cotización</Link>
+          <Link className="hover:text-gray-900 transition" to="/listar">Ver Cotizaciones</Link>
           <Link className="hover:text-gray-900 transition" to="/productos">Productos</Link>
         </div>
 

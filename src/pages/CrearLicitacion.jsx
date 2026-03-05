@@ -1,5 +1,6 @@
 // CrearLicitacion.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Toast from "../components/Toast";
 import Select, { components } from "react-select";
@@ -77,6 +78,14 @@ function formatearCLDesdeString(str) {
 function parseMontoCL(str) {
   const digits = soloDigitos(str);
   return Number(digits || 0);
+}
+
+function normalizarVolumenCm3(valor) {
+  const n = Number(valor || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // Compatibilidad con datos antiguos guardados en m3.
+  if (n < 1) return n * 1_000_000;
+  return n;
 }
 
 /**
@@ -609,6 +618,7 @@ function SortableItem({ itemId, children, onInsertAfter, canInsertAfter }) {
    COMPONENTE PRINCIPAL
 ============================================================ */
 export default function CrearLicitacion() {
+  const location = useLocation();
   const [tooltip, setTooltip] = useState({
     visible: false,
     texto: "",
@@ -744,6 +754,17 @@ export default function CrearLicitacion() {
     setTelefono(data.telefono || "");
     setCondVenta(data.condiciones_venta || "");
   }
+
+  useEffect(() => {
+    const draftDuplicado = location.state?.duplicarLicitacion;
+    if (!draftDuplicado) return;
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draftDuplicado));
+    } catch (e) {
+      console.error("Error preparando duplicado de licitación", e);
+    }
+  }, [location.state]);
 
   /* CARGAR BORRADOR */
   useEffect(() => {
@@ -1101,6 +1122,15 @@ export default function CrearLicitacion() {
     return Number(prod?.costo ?? 0);
   }
 
+  function getMetroCubicoParaItem(item) {
+    const sku = String(item?.sku || "").trim();
+    const prod =
+      (sku
+        ? productos.find((p) => String(p.sku || "").trim() === sku)
+        : null) || (item?.producto ? productos.find((p) => p.nombre === item.producto) : null);
+    return normalizarVolumenCm3(prod?.metro_cubico ?? 0);
+  }
+
   function calcularMargenItem(item) {
     const costo = getCostoParaItem(item);
     const precioBase = Number(item?.precio || 0);
@@ -1210,6 +1240,14 @@ export default function CrearLicitacion() {
   const totalNeto = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
   const totalIVA = Math.round(totalNeto * 0.19);
   const totalConIVA = totalNeto + totalIVA;
+  const metroCubicoGeneral = useMemo(
+    () =>
+      items.reduce((acc, it) => {
+        const cantidad = Math.max(1, Number(it.cantidad || 1));
+        return acc + getMetroCubicoParaItem(it) * cantidad;
+      }, 0),
+    [items, productos]
+  );
 
   const montoNum = parseMontoCL(monto);
 
@@ -1725,19 +1763,19 @@ export default function CrearLicitacion() {
       )}
 
       <h1 className="text-3xl font-semibold text-gray-900 mb-8">
-        Crear Licitación
+        Crear Cotización
       </h1>
 
       {/* DATOS LICITACIÓN */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">
-        Datos de la Licitación
+        Datos de la Cotización
       </h2>
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID Licitación *
+              ID Cotización *
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -1748,7 +1786,7 @@ export default function CrearLicitacion() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre Licitación *
+              Nombre Cotización *
             </label>
             <input
               className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -1812,6 +1850,7 @@ export default function CrearLicitacion() {
               <option value="Compra ágil">Compra ágil</option>
               <option value="Compra directa">Compra directa</option>
               <option value="Licitación">Licitación</option>
+              <option value="Cliente particular">Cliente particular</option>
             </select>
           </div>
         </div>
@@ -2256,85 +2295,100 @@ export default function CrearLicitacion() {
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cantidad de Productos
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              {cantidadProductos}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Logística</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cantidad de Productos
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                {cantidadProductos}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Flete Estimado
-            </label>
-            <input
-              type="number"
-              className="w-full h-10 rounded-md border border-gray-300 px-3"
-              value={fleteEstimado}
-              onChange={(e) => setFleteEstimado(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Flete por Unidad
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              ${fletePorUnidad.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Flete Estimado
+              </label>
+              <input
+                type="number"
+                className="w-full h-10 rounded-md border border-gray-300 px-3"
+                value={fleteEstimado}
+                onChange={(e) => setFleteEstimado(e.target.value)}
+              />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Margen General
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              {margenGeneral.toFixed(2)}%
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Flete por Unidad
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                ${fletePorUnidad.toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Centímetro cúbico general (cm³)
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 font-semibold">
+                {metroCubicoGeneral.toFixed(2)}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Neto
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalNeto.toLocaleString("es-CL")}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Financiero</h3>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Margen General
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                {margenGeneral.toFixed(2)}%
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              IVA 19%
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              ${totalIVA.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Neto
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                ${totalNeto.toLocaleString("es-CL")}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Total
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalConIVA.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                IVA 19%
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                ${totalIVA.toLocaleString("es-CL")}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              % Presupuesto
-            </label>
-            <div
-              className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
-            >
-              {porcentajePresupuesto > 0
-                ? porcentajePresupuesto.toFixed(2) + "%"
-                : "0%"}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                ${totalConIVA.toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                % Presupuesto
+              </label>
+              <div
+                className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
+              >
+                {porcentajePresupuesto > 0
+                  ? porcentajePresupuesto.toFixed(2) + "%"
+                  : "0%"}
+              </div>
             </div>
           </div>
         </div>
@@ -2382,7 +2436,7 @@ export default function CrearLicitacion() {
           }`}
           type="button"
         >
-          Guardar Licitación
+          Guardar Cotización
         </button>
       </div>
     </div>

@@ -221,7 +221,7 @@ export default function CrearProducto() {
     const l = Number(largo) || 0;
     const an = Number(ancho) || 0;
     if (!a || !l || !an) return "";
-    return ((a * l * an) / 1_000_000).toFixed(6);
+    return (a * l * an).toFixed(3);
   }, [alto, largo, ancho]);
 
   const margenVenta = useMemo(() => {
@@ -753,7 +753,7 @@ export default function CrearProducto() {
 
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Metro cúbico (m³)
+                  Centímetro cúbico (cm³)
                 </label>
                 <input
                   readOnly

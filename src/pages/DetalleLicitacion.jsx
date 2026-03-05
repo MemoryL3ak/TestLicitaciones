@@ -99,6 +99,58 @@ function parseMontoCL(str) {
   return Number(digits || 0);
 }
 
+function calcularBrutoDesdeNeto(neto) {
+  return redondear(Number(neto || 0) * 1.19);
+}
+
+function fechaHoyISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function normalizarVolumenCm3(valor) {
+  const n = Number(valor || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // Compatibilidad con datos antiguos guardados en m3.
+  if (n < 1) return n * 1_000_000;
+  return n;
+}
+
+function isMissingMontoColumnError(error) {
+  const code = (error?.code || "").toString().toUpperCase();
+  const msg = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toString()
+    .toLowerCase();
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    (code.startsWith("PGRST") && msg.includes("monto")) ||
+    (msg.includes("monto") && msg.includes("column")) ||
+    (msg.includes("monto") && msg.includes("schema cache"))
+  );
+}
+
+function isMissingFechaOcColumnError(error) {
+  const code = (error?.code || "").toString().toUpperCase();
+  const msg = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toString()
+    .toLowerCase();
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    (code.startsWith("PGRST") && msg.includes("fecha_oc")) ||
+    (msg.includes("fecha_oc") && msg.includes("column")) ||
+    (msg.includes("fecha_oc") && msg.includes("schema cache"))
+  );
+}
+
 /* ============================================================
    BUSCADOR MEJORADO (igual que Crear)
 ============================================================ */
@@ -571,6 +623,16 @@ const opcionesComuna = (regionSeleccionada) =>
 
 const OPCIONES_COND_VENTA = ["30 días", "Contado"];
 const STORAGE_KEY_PREFIX = "editar_licitacion_draft_";
+const DOC_TIPOS = {
+  orden_compra: "Orden de Compra",
+  guia_despacho: "Guía de Despacho",
+  factura: "Factura",
+};
+const DOC_BUCKET_BY_TIPO = {
+  orden_compra: "orden-compra",
+  guia_despacho: "guia-despacho",
+  factura: "factura",
+};
 
 /* ============================================================
    Sortable Item wrapper
@@ -629,10 +691,59 @@ export default function EditarLicitacion() {
     : location.pathname.startsWith("/dashboard/")
     ? "/dashboard/licitaciones"
     : "/licitaciones";
+  const rutaCrearLicitacion = location.pathname.startsWith("/app/")
+    ? "/app/crear"
+    : location.pathname.startsWith("/dashboard/")
+    ? "/dashboard/crear"
+    : "/crear";
 
   function volver() {
     if (window.history.length > 1) requestNavigation(-1);
     else requestNavigation(baseLicitaciones, { replace: true });
+  }
+
+  function duplicarLicitacion() {
+    const draftDuplicado = {
+      idLicitacionInput: "",
+      nombre: nombre || "",
+      fechaHoraCierre: fechaHoraCierre || "",
+      monto: monto || "",
+      listado: listado || "1",
+      rutEntidad: rutEntidad || "",
+      nombreEntidad: nombreEntidad || "",
+      departamento: departamento || "",
+      municipalidad: municipalidad || "",
+      direccion: direccion || "",
+      contacto: contacto || "",
+      email: email || "",
+      telefono: telefono || "",
+      condVenta: condVenta || "",
+      fleteEstimado: fleteEstimado || 0,
+      tipoCompra: tipoCompra || "Compra ágil",
+      region: region || "",
+      comuna: comuna || "",
+      observaciones: observaciones || "",
+      items: (items || []).map((it) => ({
+        sku: it?.sku || "",
+        producto: it?.producto || "",
+        categoria: it?.categoria || "",
+        formato: it?.formato || "",
+        cantidad: Number(it?.cantidad || 0),
+        precio: Number(it?.precio || 0),
+        costo: Number(it?.costo || 0),
+        total: Number(it?.total || 0),
+        observacion: it?.observacion || "",
+        mostrarObs: Boolean(it?.mostrarObs),
+        precioManual: Boolean(it?.precioManual),
+        precioUnitarioStr: it?.precioUnitarioStr || "",
+        costoManual: Boolean(it?.costoManual),
+        costoStr: it?.costoStr || "",
+      })),
+    };
+
+    navigate(rutaCrearLicitacion, {
+      state: { duplicarLicitacion: draftDuplicado },
+    });
   }
 
   const [tooltip, setTooltip] = useState({
@@ -650,7 +761,18 @@ export default function EditarLicitacion() {
   const [generandoPDF, setGenerandoPDF] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
+  const [confirmEliminarDocOpen, setConfirmEliminarDocOpen] = useState(false);
+  const [confirmDuplicarOpen, setConfirmDuplicarOpen] = useState(false);
+  const [docAEliminar, setDocAEliminar] = useState(null);
   const [aprobando, setAprobando] = useState(false);
+  const [documentos, setDocumentos] = useState([]);
+  const [docTipo, setDocTipo] = useState("orden_compra");
+  const [docNumero, setDocNumero] = useState("");
+  const [docMonto, setDocMonto] = useState("");
+  const [docFechaOC, setDocFechaOC] = useState(fechaHoyISO());
+  const [docDerivaDeId, setDocDerivaDeId] = useState("");
+  const [docFile, setDocFile] = useState(null);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
 
   const STORAGE_KEY = `${STORAGE_KEY_PREFIX}${id}`;
 
@@ -663,6 +785,8 @@ export default function EditarLicitacion() {
   const [monto, setMonto] = useState("");
   const [listado, setListado] = useState("1");
   const [estado, setEstado] = useState("En espera");
+  const [fechaAdjudicada, setFechaAdjudicada] = useState(null);
+  const [margenAprobado, setMargenAprobado] = useState(false);
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
 
   const [observaciones, setObservaciones] = useState("");
@@ -727,6 +851,33 @@ export default function EditarLicitacion() {
      ✅ REGLA DE EDICIÓN + ESTILOS GRIS (disabled)
 ============================================================ */
   const esEditable = estado === "En espera" || estado === "Pendiente Aprobación";
+
+  useEffect(() => {
+    setDocDerivaDeId("");
+    if (docTipo !== "orden_compra") {
+      setDocMonto("");
+      setDocFechaOC(fechaHoyISO());
+    }
+  }, [docTipo]);
+
+  const opcionesDeriva = useMemo(() => {
+    if (docTipo === "guia_despacho") {
+      return documentos.filter((d) => d.tipo === "orden_compra");
+    }
+    if (docTipo === "factura") {
+      return documentos.filter((d) => d.tipo === "guia_despacho");
+    }
+    return [];
+  }, [docTipo, documentos]);
+
+  const opcionesDerivaSelect = useMemo(
+    () =>
+      opcionesDeriva.map((d) => ({
+        value: String(d.id),
+        label: `${DOC_TIPOS[d.tipo] || d.tipo}${d.numero ? ` - ${d.numero}` : ""}`,
+      })),
+    [opcionesDeriva]
+  );
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-3 py-2 " +
@@ -863,6 +1014,28 @@ export default function EditarLicitacion() {
     setToast(null);
 
     try {
+      const { data: docsLic } = await supabase
+        .from("licitacion_documentos")
+        .select("id,bucket,storage_path")
+        .eq("licitacion_id", Number(id));
+
+      for (const doc of docsLic || []) {
+        if (!doc?.bucket || !doc?.storage_path) continue;
+        const { error: errStorage } = await supabase.storage
+          .from(doc.bucket)
+          .remove([doc.storage_path]);
+        if (errStorage) {
+          console.error("Error borrando archivo de storage:", errStorage);
+        }
+      }
+
+      const { error: errDocs } = await supabase
+        .from("licitacion_documentos")
+        .delete()
+        .eq("licitacion_id", Number(id));
+
+      if (errDocs) throw errDocs;
+
       const { error: errItems } = await supabase
         .from("items_licitacion")
         .delete()
@@ -901,12 +1074,13 @@ export default function EditarLicitacion() {
     try {
       const { error } = await supabase
         .from("licitaciones")
-        .update({ estado: "En espera" })
+        .update({ estado: "En espera", margen_aprobado: true })
         .eq("id", id);
 
       if (error) throw error;
 
       setEstado("En espera");
+      setMargenAprobado(true);
       setToast({ type: "success", message: "Licitación aprobada." });
     } catch (e) {
       console.error("Error aprobando licitación:", e);
@@ -923,6 +1097,15 @@ export default function EditarLicitacion() {
         ? productos.find((p) => String(p.sku || "").trim() === sku)
         : null) || (item?.producto ? productos.find((p) => p.nombre === item.producto) : null);
     return Number(prod?.costo ?? 0);
+  }
+
+  function getMetroCubicoParaItem(item) {
+    const sku = String(item?.sku || "").trim();
+    const prod =
+      (sku
+        ? productos.find((p) => String(p.sku || "").trim() === sku)
+        : null) || (item?.producto ? productos.find((p) => p.nombre === item.producto) : null);
+    return normalizarVolumenCm3(prod?.metro_cubico ?? 0);
   }
 
   function calcularMargenItem(item) {
@@ -951,6 +1134,266 @@ export default function EditarLicitacion() {
     };
   }
 
+  function normalizarNombreArchivo(value) {
+    return (value ?? "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_.-]+/g, "_");
+  }
+
+  async function cargarDocumentosLicitacion() {
+    const { data, error } = await supabase
+      .from("licitacion_documentos")
+      .select("*")
+      .eq("licitacion_id", Number(id))
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error cargando documentos:", error);
+      setDocumentos([]);
+      return;
+    }
+
+    setDocumentos(data || []);
+  }
+
+  async function abrirDocumento(doc) {
+    if (!doc?.bucket || !doc?.storage_path) return;
+    const { data, error } = await supabase.storage
+      .from(doc.bucket)
+      .createSignedUrl(doc.storage_path, 60);
+
+    if (error || !data?.signedUrl) {
+      console.error("Error creando URL firmada:", error);
+      setToast({ type: "error", message: "No se pudo abrir el documento." });
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function eliminarDocumento(doc) {
+    if (!doc?.id) return;
+
+    setToast(null);
+
+    const { error: errDb } = await supabase
+      .from("licitacion_documentos")
+      .delete()
+      .eq("id", doc.id);
+
+    if (errDb) {
+      console.error("Error eliminando documento:", errDb);
+      setToast({ type: "error", message: "No se pudo eliminar el documento." });
+      return;
+    }
+
+    if (doc.bucket && doc.storage_path) {
+      const { error: errStorage } = await supabase.storage
+        .from(doc.bucket)
+        .remove([doc.storage_path]);
+
+      if (errStorage) {
+        console.error("Error borrando archivo de storage:", errStorage);
+      }
+    }
+
+    setToast({ type: "success", message: "Documento eliminado." });
+    await cargarDocumentosLicitacion();
+  }
+
+  function solicitarEliminarDocumento(doc) {
+    if (!doc?.id) return;
+    setDocAEliminar(doc);
+    setConfirmEliminarDocOpen(true);
+  }
+
+  async function confirmarEliminarDocumento() {
+    const doc = docAEliminar;
+    setConfirmEliminarDocOpen(false);
+    setDocAEliminar(null);
+    await eliminarDocumento(doc);
+  }
+
+  async function subirDocumento() {
+    if (subiendoDoc) return;
+    setToast(null);
+
+    const file = docFile;
+    if (!file) {
+      setToast({ type: "error", message: "Debes seleccionar un PDF." });
+      return;
+    }
+
+    const tipo = String(docTipo || "").trim();
+    const bucket = DOC_BUCKET_BY_TIPO[tipo];
+    if (!bucket) {
+      setToast({ type: "error", message: "Tipo de documento inválido." });
+      return;
+    }
+    const montoNetoOrdenCompra = parseMontoCL(docMonto);
+    if (tipo === "orden_compra" && montoNetoOrdenCompra <= 0) {
+      setToast({
+        type: "error",
+        message: "Debes ingresar el monto neto de la orden de compra.",
+      });
+      return;
+    }
+    const fechaOc = (docFechaOC || "").toString().trim();
+    if (tipo === "orden_compra" && !fechaOc) {
+      setToast({
+        type: "error",
+        message: "Debes ingresar la fecha de la orden de compra.",
+      });
+      return;
+    }
+
+    const esPdf =
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!esPdf) {
+      setToast({ type: "error", message: "Solo se permite subir archivos PDF." });
+      return;
+    }
+
+    const requiereDeriva = tipo === "guia_despacho" || tipo === "factura";
+    if (requiereDeriva && !docDerivaDeId) {
+      setToast({
+        type: "error",
+        message:
+          tipo === "guia_despacho"
+            ? "La guía de despacho debe derivar de una orden de compra."
+            : "La factura debe derivar de una guía de despacho.",
+      });
+      return;
+    }
+
+    if (tipo === "guia_despacho") {
+      const docOrigen = documentos.find(
+        (d) => String(d.id) === String(docDerivaDeId)
+      );
+      if (!docOrigen || docOrigen.tipo !== "orden_compra") {
+        setToast({
+          type: "error",
+          message: "La guía de despacho debe vincularse a una orden de compra válida.",
+        });
+        return;
+      }
+    }
+
+    if (tipo === "factura") {
+      const docOrigen = documentos.find(
+        (d) => String(d.id) === String(docDerivaDeId)
+      );
+      if (!docOrigen || docOrigen.tipo !== "guia_despacho") {
+        setToast({
+          type: "error",
+          message: "La factura debe vincularse a una guía de despacho válida.",
+        });
+        return;
+      }
+    }
+
+    setSubiendoDoc(true);
+
+    try {
+      const ext = (file.name.split(".").pop() || "pdf").toLowerCase();
+      const safeName = normalizarNombreArchivo(file.name.replace(/\.[^.]+$/, ""));
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}-${safeName}.${ext}`;
+      const storagePath = `${id}/${fileName}`;
+
+      const { error: upErr } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, file, {
+          contentType: "application/pdf",
+          upsert: false,
+        });
+
+      if (upErr) throw upErr;
+
+      const payload = {
+        licitacion_id: Number(id),
+        tipo,
+        numero: (docNumero || "").trim() || null,
+        monto: tipo === "orden_compra" ? montoNetoOrdenCompra : null,
+        fecha_oc: tipo === "orden_compra" ? fechaOc : null,
+        deriva_de_id: docDerivaDeId ? Number(docDerivaDeId) : null,
+        bucket,
+        storage_path: storagePath,
+        file_name: file.name,
+        mime_type: file.type || "application/pdf",
+        size_bytes: Number(file.size || 0),
+      };
+
+      let usedFallbackSinMonto = false;
+      let { error: insErr } = await supabase
+        .from("licitacion_documentos")
+        .insert(payload)
+        .select("id")
+        .single();
+
+      if (insErr && isMissingMontoColumnError(insErr)) {
+        const payloadSinMonto = { ...payload };
+        delete payloadSinMonto.monto;
+        const retry = await supabase
+          .from("licitacion_documentos")
+          .insert(payloadSinMonto)
+          .select("id")
+          .single();
+        insErr = retry.error;
+        usedFallbackSinMonto = !insErr;
+      }
+
+      if (insErr && isMissingFechaOcColumnError(insErr)) {
+        const payloadSinFechaOc = { ...payload };
+        delete payloadSinFechaOc.fecha_oc;
+        const retry = await supabase
+          .from("licitacion_documentos")
+          .insert(payloadSinFechaOc)
+          .select("id")
+          .single();
+        insErr = retry.error;
+      }
+
+      if (insErr) {
+        await supabase.storage.from(bucket).remove([storagePath]);
+        throw insErr;
+      }
+
+      setDocNumero("");
+      setDocMonto("");
+      setDocFechaOC(fechaHoyISO());
+      setDocDerivaDeId("");
+      setDocFile(null);
+      setToast({
+        type: "success",
+        message: usedFallbackSinMonto
+          ? "Documento cargado. Falta aplicar migración para guardar monto de OC."
+          : "Documento cargado correctamente.",
+      });
+      await cargarDocumentosLicitacion();
+    } catch (e) {
+      console.error("Error subiendo documento:", {
+        code: e?.code,
+        message: e?.message,
+        details: e?.details,
+        hint: e?.hint,
+        raw: e,
+      });
+      const detalle = [e?.code, e?.message].filter(Boolean).join(" - ");
+      setToast({
+        type: "error",
+        message: detalle
+          ? `No se pudo cargar el documento. ${detalle}`
+          : "No se pudo cargar el documento.",
+      });
+    } finally {
+      setSubiendoDoc(false);
+    }
+  }
+
   /* ============================================================
      BORRADOR
 ============================================================ */
@@ -968,6 +1411,7 @@ export default function EditarLicitacion() {
       setListado(data.listado || "1");
       setEstado(data.estado || "En espera");
       setTipoCompra(data.tipoCompra || "Compra ágil");
+      setMargenAprobado(Boolean(data.margenAprobado || data.margen_aprobado));
 
       setRutEntidad(data.rutEntidad || "");
       setNombreEntidad(data.nombreEntidad || "");
@@ -1027,6 +1471,7 @@ export default function EditarLicitacion() {
       monto,
       listado,
       estado,
+      margenAprobado,
       tipoCompra,
       rutEntidad,
       nombreEntidad,
@@ -1057,6 +1502,7 @@ export default function EditarLicitacion() {
     monto,
     listado,
     estado,
+    margenAprobado,
     tipoCompra,
     rutEntidad,
     nombreEntidad,
@@ -1088,6 +1534,7 @@ export default function EditarLicitacion() {
       monto: Number(monto || 0),
       listado: String(listado || "1"),
       estado: estado || "En espera",
+      margenAprobado: Boolean(margenAprobado),
       tipoCompra: tipoCompra || "Compra ágil",
 
       rutEntidad: rutEntidad || "",
@@ -1209,6 +1656,8 @@ export default function EditarLicitacion() {
     setMonto(lic.monto || "");
     setListado(String(lic.lista_precios || "1"));
     setEstado(lic.estado || "En espera");
+    setFechaAdjudicada(lic.fecha_adjudicada || null);
+    setMargenAprobado(Boolean(lic.margen_aprobado));
     setTipoCompra(lic.tipo_compra || "Compra ágil");
 
     setRutEntidad(lic.rut_entidad || "");
@@ -1229,6 +1678,7 @@ export default function EditarLicitacion() {
     setVendedorNombre(lic.vendedor_nombre || "");
     setVendedorCelular(lic.vendedor_celular || "");
     setVendedorCorreo(lic.vendedor_correo || "");
+    await cargarDocumentosLicitacion();
 
     const cantidadProductosDB = (itemsDB || []).reduce(
       (acc, it) => acc + Number(it.cantidad || 0),
@@ -1373,6 +1823,7 @@ export default function EditarLicitacion() {
   useEffect(() => {
     async function cargarTodoDB() {
       if (hydrated && localStorage.getItem(STORAGE_KEY)) {
+        await cargarDocumentosLicitacion();
         setLoading(false);
         return;
       }
@@ -1405,6 +1856,8 @@ export default function EditarLicitacion() {
       setMonto(lic.monto || "");
       setListado(String(lic.lista_precios || "1"));
       setEstado(lic.estado || "En espera");
+      setFechaAdjudicada(lic.fecha_adjudicada || null);
+      setMargenAprobado(Boolean(lic.margen_aprobado));
       setTipoCompra(lic.tipo_compra || "Compra ágil");
 
       setRutEntidad(lic.rut_entidad || "");
@@ -1425,6 +1878,7 @@ export default function EditarLicitacion() {
       setVendedorNombre(lic.vendedor_nombre || "");
       setVendedorCelular(lic.vendedor_celular || "");
       setVendedorCorreo(lic.vendedor_correo || "");
+      await cargarDocumentosLicitacion();
 
       const cantidadProductosDB = (itemsDB || []).reduce(
         (acc, it) => acc + Number(it.cantidad || 0),
@@ -1572,6 +2026,25 @@ export default function EditarLicitacion() {
   const totalNeto = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
   const totalIVA = Math.round(totalNeto * 0.19);
   const totalConIVA = totalNeto + totalIVA;
+  const metroCubicoGeneral = useMemo(
+    () =>
+      items.reduce((acc, it) => {
+        const cantidad = Math.max(1, Number(it.cantidad || 1));
+        return acc + getMetroCubicoParaItem(it) * cantidad;
+      }, 0),
+    [items, productos]
+  );
+  const montoConsumidoOCNeto = useMemo(
+    () =>
+      (documentos || [])
+        .filter((d) => d?.tipo === "orden_compra")
+        .reduce((acc, d) => acc + Number(d?.monto || 0), 0),
+    [documentos]
+  );
+  const montoConsumidoOC = calcularBrutoDesdeNeto(montoConsumidoOCNeto);
+  const saldoPorConsumirResumen = totalConIVA - montoConsumidoOC;
+  const montoNetoOCFormulario = parseMontoCL(docMonto);
+  const montoBrutoOCFormulario = calcularBrutoDesdeNeto(montoNetoOCFormulario);
 
   let porcentajePresupuesto = 0;
   if (Number(monto) > 0) porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
@@ -1950,12 +2423,23 @@ export default function EditarLicitacion() {
         })
         .filter(Boolean);
 
-      const requiereAprobacion = margenGeneral < 20;
+      const requiereAprobacion = margenGeneral < 20 && !margenAprobado;
       const estadoFinal =
         requiereAprobacion && estado !== "En espera" ? "Pendiente Aprobación" : estado;
+      const margenAprobadoFinal = margenGeneral < 20 ? margenAprobado : false;
+      const fechaAdjudicadaFinal =
+        estadoFinal === "Adjudicada"
+          ? fechaAdjudicada || new Date().toISOString()
+          : fechaAdjudicada;
 
       if (estadoFinal !== estado) {
         setEstado(estadoFinal);
+      }
+      if (fechaAdjudicadaFinal !== fechaAdjudicada) {
+        setFechaAdjudicada(fechaAdjudicadaFinal);
+      }
+      if (margenAprobadoFinal !== margenAprobado) {
+        setMargenAprobado(margenAprobadoFinal);
       }
 
       const { error: errUpdate } = await supabase
@@ -1981,6 +2465,8 @@ export default function EditarLicitacion() {
           condicion_venta: condVenta,
 
           estado: estadoFinal,
+          margen_aprobado: margenAprobadoFinal,
+          fecha_adjudicada: fechaAdjudicadaFinal,
           flete_estimado: Number(fleteEstimado),
 
           total_con_iva: totalConIVA,
@@ -2165,10 +2651,17 @@ export default function EditarLicitacion() {
 
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-semibold text-gray-900">
-          Edición de Licitación #{idLicitacionInput}
+          Edición de Cotizaciones #{idLicitacionInput}
         </h1>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmDuplicarOpen(true)}
+            className="cursor-pointer select-none text-sm px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+          >
+            Duplicar
+          </button>
           {esAdmin && estado === "Pendiente Aprobación" && (
             <button
               type="button"
@@ -2201,14 +2694,14 @@ export default function EditarLicitacion() {
 
       {/* DATOS LICITACIÓN */}
       <h2 className="text-xl font-semibold text-gray-800 mb-3">
-        Datos de la Licitación
+        Datos de la Cotización
       </h2>
 
       <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID Licitación *
+              ID Cotización *
             </label>
             <input
               className={inputClass}
@@ -2223,7 +2716,7 @@ export default function EditarLicitacion() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre Licitación *
+              Nombre Cotización *
             </label>
             <input
               className={inputClass}
@@ -2290,6 +2783,7 @@ export default function EditarLicitacion() {
               <option value="Compra ágil">Compra ágil</option>
               <option value="Compra directa">Compra directa</option>
               <option value="Licitación">Licitación</option>
+              <option value="Cliente particular">Cliente particular</option>
             </select>
           </div>
 
@@ -2775,86 +3269,119 @@ export default function EditarLicitacion() {
       <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cantidad de Productos
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              {cantidadProductos}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Logística</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cantidad de Productos
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                {cantidadProductos}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Flete Estimado
-            </label>
-            <input
-              type="number"
-              className={inputClassH10}
-              value={fleteEstimado}
-              onChange={(e) => setFleteEstimado(e.target.value)}
-              disabled={!esEditable}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Flete por Unidad
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              ${fletePorUnidad.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Flete Estimado
+              </label>
+              <input
+                type="number"
+                className={inputClassH10}
+                value={fleteEstimado}
+                onChange={(e) => setFleteEstimado(e.target.value)}
+                disabled={!esEditable}
+              />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Margen General
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              {margenGeneral.toFixed(2)}%
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Flete por Unidad
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                ${fletePorUnidad.toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Centímetro cúbico general (cm³)
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 font-semibold">
+                {metroCubicoGeneral.toFixed(2)}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Neto
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalNeto.toLocaleString("es-CL")}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Financiero</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Margen General
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                {margenGeneral.toFixed(2)}%
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              IVA 19%
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
-              ${totalIVA.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Neto
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                ${totalNeto.toLocaleString("es-CL")}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Total
-            </label>
-            <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
-              ${totalConIVA.toLocaleString("es-CL")}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                IVA 19%
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50">
+                ${totalIVA.toLocaleString("es-CL")}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              % Presupuesto
-            </label>
-            <div
-              className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
-            >
-              {porcentajePresupuesto > 0
-                ? porcentajePresupuesto.toFixed(2) + "%"
-                : "0%"}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                ${totalConIVA.toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                % Presupuesto
+              </label>
+              <div
+                className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
+              >
+                {porcentajePresupuesto > 0
+                  ? porcentajePresupuesto.toFixed(2) + "%"
+                  : "0%"}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor consumido
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 font-semibold">
+                ${montoConsumidoOC.toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Saldo por consumir
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center bg-gray-50 font-semibold">
+                ${saldoPorConsumirResumen.toLocaleString("es-CL")}
+              </div>
             </div>
           </div>
         </div>
@@ -2877,6 +3404,205 @@ export default function EditarLicitacion() {
           placeholder="Escribe observaciones generales para la licitación…"
           disabled={!esEditable}
         />
+      </div>
+
+      {/* DOCUMENTOS */} 
+      <div className="bg-white border border-gray-300 rounded-xl shadow-sm p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Documentos</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          <div className="md:col-span-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+            <select
+              className={`${inputClass} text-sm`}
+              value={docTipo}
+              onChange={(e) => setDocTipo(e.target.value)}
+              disabled={subiendoDoc}
+            >
+              <option value="orden_compra">Orden de Compra</option>
+              <option value="guia_despacho">Guía de Despacho</option>
+              <option value="factura">Factura</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+            <input
+              className={`${inputClass} text-sm`}
+              value={docNumero}
+              onChange={(e) => setDocNumero(e.target.value)}
+              placeholder="Ej: OC-2026-001"
+              disabled={subiendoDoc}
+            />
+          </div>
+
+          {docTipo === "orden_compra" && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Monto Neto OC *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={`${inputClass} text-sm`}
+                value={docMonto}
+                onChange={(e) => setDocMonto(formatearCLDesdeString(e.target.value))}
+                placeholder="Ej: 1.250.000"
+                disabled={subiendoDoc}
+              />
+            </div>
+          )}
+
+          {docTipo === "orden_compra" && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha OC *</label>
+              <input
+                type="date"
+                className={`${inputClass} text-sm`}
+                value={docFechaOC}
+                onChange={(e) => setDocFechaOC(e.target.value)}
+                disabled={subiendoDoc}
+              />
+            </div>
+          )}
+
+          {docTipo === "orden_compra" && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Monto Bruto OC</label>
+              <input
+                type="text"
+                className={`${inputClass} text-sm bg-gray-100`}
+                value={montoNetoOCFormulario > 0 ? `$${montoBrutoOCFormulario.toLocaleString("es-CL")}` : ""}
+                placeholder="Neto x 1,19"
+                readOnly
+                disabled
+              />
+            </div>
+          )}
+
+          {(docTipo === "guia_despacho" || docTipo === "factura") && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Deriva de *
+              </label>
+              <Select
+                options={opcionesDerivaSelect}
+                styles={customStyles}
+                placeholder="Buscar documento"
+                menuPortalTarget={document.body}
+                isSearchable={true}
+                filterOption={filtrarPorTerminos}
+                isClearable={true}
+                isDisabled={subiendoDoc}
+                noOptionsMessage={() => "Sin documentos disponibles"}
+                value={
+                  opcionesDerivaSelect.find((o) => o.value === String(docDerivaDeId)) ||
+                  null
+                }
+                onChange={(op) => setDocDerivaDeId(op?.value || "")}
+              />
+            </div>
+          )}
+
+          <div className="md:col-span-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">PDF *</label>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className={`${inputClass} text-xs file:mr-2 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs file:font-medium`}
+              onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+              disabled={subiendoDoc}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <button
+              type="button"
+              onClick={subirDocumento}
+              disabled={subiendoDoc}
+              className={`w-full h-10 bg-blue-600 text-white px-3 text-sm rounded-md shadow hover:bg-blue-700 ${
+                subiendoDoc ? btnDisabled : "cursor-pointer"
+              }`}
+            >
+              {subiendoDoc ? "Subiendo..." : "Agregar Documento"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tipo</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Número</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Monto Neto</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Monto Bruto</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Deriva de</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Archivo</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Fecha</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {documentos.map((doc) => {
+                const docOrigen = documentos.find((x) => x.id === doc.deriva_de_id);
+                return (
+                  <tr key={doc.id}>
+                    <td className="px-3 py-2 text-sm">{DOC_TIPOS[doc.tipo] || doc.tipo}</td>
+                    <td className="px-3 py-2 text-sm">{doc.numero || "-"}</td>
+                    <td className="px-3 py-2 text-sm">
+                      {doc.monto !== null && doc.monto !== undefined
+                        ? `$${Number(doc.monto).toLocaleString("es-CL")}`
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-sm">
+                      {doc.monto !== null && doc.monto !== undefined
+                        ? `$${calcularBrutoDesdeNeto(doc.monto).toLocaleString("es-CL")}`
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-sm">
+                      {docOrigen
+                        ? `${DOC_TIPOS[docOrigen.tipo] || docOrigen.tipo}${docOrigen.numero ? ` - ${docOrigen.numero}` : ""}`
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-sm">{doc.file_name || "-"}</td>
+                    <td className="px-3 py-2 text-sm">
+                      {doc.tipo === "orden_compra" && doc.fecha_oc
+                        ? new Date(`${doc.fecha_oc}T00:00:00`).toLocaleDateString("es-CL")
+                        : doc.created_at
+                        ? new Date(doc.created_at).toLocaleString("es-CL")
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-sm">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => abrirDocumento(doc)}
+                          className="bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => solicitarEliminarDocumento(doc)}
+                          className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {documentos.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="px-3 py-4 text-sm text-gray-500 text-center">
+                    No hay documentos cargados para esta licitación.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* BOTONES */}
@@ -2932,6 +3658,34 @@ export default function EditarLicitacion() {
           </button>
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmDuplicarOpen}
+        title="Duplicar licitación"
+        message="Se abrirá una nueva licitación en creación con los mismos datos e ítems de esta licitación. El ID de licitación quedará vacío para que ingreses uno nuevo. ¿Deseas continuar?"
+        confirmText="Duplicar"
+        confirmTone="primary"
+        onCancel={() => setConfirmDuplicarOpen(false)}
+        onConfirm={() => {
+          setConfirmDuplicarOpen(false);
+          duplicarLicitacion();
+        }}
+      />
+
+      <ConfirmModal
+        open={confirmEliminarDocOpen}
+        title="Eliminar documento"
+        message={`Vas a eliminar ${
+          DOC_TIPOS[docAEliminar?.tipo] || "documento"
+        }${docAEliminar?.numero ? ` (${docAEliminar.numero})` : ""}${
+          docAEliminar?.file_name ? ` - ${docAEliminar.file_name}` : ""
+        }. Esta acción no se puede deshacer.`}
+        onCancel={() => {
+          setConfirmEliminarDocOpen(false);
+          setDocAEliminar(null);
+        }}
+        onConfirm={confirmarEliminarDocumento}
+      />
 
       <ConfirmModal
         open={confirmEliminarOpen}

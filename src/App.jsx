@@ -29,6 +29,7 @@ import MonitoreoUsuarios from "./pages/MonitoreoUsuarios";
 import CampanasProductos from "./pages/CampanasProductos"; // LISTADO
 import CrearCampana from "./pages/CrearCampana";
 import EditarCampana from "./pages/EditarCampana";
+import Ventas from "./pages/Ventas";
 
 /* ============================================================
    WRAPPER PARA OCULTAR BANNER EN LOGIN / RESET
@@ -94,6 +95,7 @@ function LayoutWrapper() {
           <Route path="campanas" element={<CampanasProductos />} />
           <Route path="campanas/nueva" element={<CrearCampana />} />
           <Route path="campanas/editar/:id" element={<EditarCampana />} />
+          <Route path="ventas" element={<Ventas />} />
         </Route>
 
         {/* FALLBACK */}

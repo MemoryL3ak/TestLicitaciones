@@ -230,8 +230,8 @@ export default function ListarLicitaciones() {
       const nombre = (usuariosMap[email] || "").trim();
 
       return {
-        "N° Licitación": l.id,
-        "ID Licitación": l.id_licitacion,
+        "N° Cotización": l.id,
+        "ID Cotización": l.id_licitacion,
         Fecha: l.fecha ? l.fecha.slice(0, 10) : "",
         Comuna: l.comuna || "",
         Estado: l.estado || "",
@@ -241,17 +241,17 @@ export default function ListarLicitaciones() {
 
     const worksheet = XLSX.utils.json_to_sheet(datosExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Licitaciones");
-    XLSX.writeFile(workbook, "licitaciones.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Cotizaciones");
+    XLSX.writeFile(workbook, "cotizaciones.xlsx");
   };
 
   // ----------------------------------------------------------------
   // RENDER
   // ----------------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto p-8">
+    <div className="w-full max-w-[92rem] mx-auto p-8">
       <h1 className="text-3xl font-semibold text-gray-900 mb-8">
-        Licitaciones
+        Cotizaciones
       </h1>
 
       {/* -----------------------------------------------------------
@@ -285,13 +285,13 @@ export default function ListarLicitaciones() {
 
           <div>
             <label className="text-sm font-semibold text-gray-700">
-              ID Licitación
+              ID Cotización
             </label>
             <input
               type="text"
               value={filtroIdLicitacion}
               onChange={(e) => setFiltroIdLicitacion(e.target.value)}
-              placeholder="Buscar ID licitación"
+              placeholder="Buscar ID cotización"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50"
             />
           </div>
@@ -485,10 +485,10 @@ export default function ListarLicitaciones() {
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
-                  N° Licitación
+                  N° Cotización
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
-                  ID Licitación
+                  ID Cotización
                 </th>
                 <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Fecha

@@ -150,6 +150,18 @@ export default function SidebarLayout() {
               </Link>
             )}
 
+            {puedeVerVentas && (
+              <Link
+                to="/metas"
+                onClick={(e) => onNavClick(e, "/metas")}
+                className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
+                  "/metas"
+                )}`}
+              >
+                Metas
+              </Link>
+            )}
+
             {esAdmin && (
               <Link
                 to="/monitoreo"

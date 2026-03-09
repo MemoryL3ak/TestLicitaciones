@@ -1976,19 +1976,26 @@ export default function EditarLicitacion() {
     const item = { ...copia[index] };
 
     item.precioUnitarioStr = formatearCLDesdeString(valorStr);
-    const unitConFlete = parseMontoCL(item.precioUnitarioStr);
-
-    const baseSinFlete = Math.max(0, unitConFlete - Number(fletePorUnidad || 0));
-    item.precio = baseSinFlete;
+    const baseSinFlete = parseMontoCL(item.precioUnitarioStr);
+    item.precio = Math.max(0, baseSinFlete);
     item.precioManual = true;
 
     const cantidad = Math.max(1, Number(item.cantidad || 1));
-    item.total = redondear(
-      cantidad * (baseSinFlete + Number(fletePorUnidad || 0))
-    );
+    const precioConFlete = Number(item.precio || 0) + Number(fletePorUnidad || 0);
+    item.total = redondear(cantidad * precioConFlete);
 
     copia[index] = item;
     setItems(copia);
+  }
+
+  function finalizarEdicionPrecioUnitario(index) {
+    setItems((prev) => {
+      const copia = [...prev];
+      const item = { ...copia[index] };
+      item.precioUnitarioStr = "";
+      copia[index] = item;
+      return copia;
+    });
   }
 
   useEffect(() => {
@@ -1998,17 +2005,12 @@ export default function EditarLicitacion() {
       const cantidad = Math.max(1, Number(it.cantidad || 1));
 
       if (it.precioManual && (it.precioUnitarioStr ?? "") !== "") {
-        const unitConFlete = parseMontoCL(it.precioUnitarioStr);
-        const baseSinFlete = Math.max(
-          0,
-          unitConFlete - Number(fletePorUnidad || 0)
-        );
+        const baseSinFlete = parseMontoCL(it.precioUnitarioStr);
+        const precioConFlete = baseSinFlete + Number(fletePorUnidad || 0);
         return {
           ...it,
-          precio: baseSinFlete,
-          total: redondear(
-            cantidad * (baseSinFlete + Number(fletePorUnidad || 0))
-          ),
+          precio: Math.max(0, baseSinFlete),
+          total: redondear(cantidad * precioConFlete),
         };
       }
 
@@ -3135,6 +3137,7 @@ export default function EditarLicitacion() {
                           onChange={(e) =>
                             actualizarPrecioUnitario(index, e.target.value)
                           }
+                          onBlur={() => finalizarEdicionPrecioUnitario(index)}
                           disabled={!esEditable}
                         />
                       </div>

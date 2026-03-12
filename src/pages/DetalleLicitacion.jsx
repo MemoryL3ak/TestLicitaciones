@@ -1,6 +1,6 @@
 ﻿// DetalleLicitacion.jsx
 // ✅ Regla: TODOS los campos se editan SOLO cuando estado === "En espera"
-// ✅ Estado SIEMPRE se puede cambiar
+// ✅ Estado editable, excepto "Pendiente Aprobación" para no-admin
 // ✅ Además: cuando está bloqueado, los campos se ven GRIS (disabled styles)
 // ✅ Drag & drop / ítems / flete / observaciones / entidad / licitación: bloqueados si no está "En espera"
 
@@ -785,6 +785,7 @@ export default function EditarLicitacion() {
   const [monto, setMonto] = useState("");
   const [listado, setListado] = useState("1");
   const [estado, setEstado] = useState("En espera");
+  const [estadoActualDB, setEstadoActualDB] = useState("En espera");
   const [fechaAdjudicada, setFechaAdjudicada] = useState(null);
   const [margenAprobado, setMargenAprobado] = useState(false);
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
@@ -851,6 +852,9 @@ export default function EditarLicitacion() {
      ✅ REGLA DE EDICIÓN + ESTILOS GRIS (disabled)
 ============================================================ */
   const esEditable = estado === "En espera" || estado === "Pendiente Aprobación";
+  const estadoBloqueadoPendiente =
+    !esAdmin && estadoActualDB === "Pendiente Aprobación";
+  const puedeEditarEstado = !estadoBloqueadoPendiente;
 
   useEffect(() => {
     setDocDerivaDeId("");
@@ -1080,6 +1084,7 @@ export default function EditarLicitacion() {
       if (error) throw error;
 
       setEstado("En espera");
+      setEstadoActualDB("En espera");
       setMargenAprobado(true);
       setToast({ type: "success", message: "Licitación aprobada." });
     } catch (e) {
@@ -1656,6 +1661,7 @@ export default function EditarLicitacion() {
     setMonto(lic.monto || "");
     setListado(String(lic.lista_precios || "1"));
     setEstado(lic.estado || "En espera");
+    setEstadoActualDB(lic.estado || "En espera");
     setFechaAdjudicada(lic.fecha_adjudicada || null);
     setMargenAprobado(Boolean(lic.margen_aprobado));
     setTipoCompra(lic.tipo_compra || "Compra ágil");
@@ -1856,6 +1862,7 @@ export default function EditarLicitacion() {
       setMonto(lic.monto || "");
       setListado(String(lic.lista_precios || "1"));
       setEstado(lic.estado || "En espera");
+      setEstadoActualDB(lic.estado || "En espera");
       setFechaAdjudicada(lic.fecha_adjudicada || null);
       setMargenAprobado(Boolean(lic.margen_aprobado));
       setTipoCompra(lic.tipo_compra || "Compra ágil");
@@ -2425,9 +2432,14 @@ export default function EditarLicitacion() {
         })
         .filter(Boolean);
 
+      const estadoSolicitado = estadoBloqueadoPendiente
+        ? "Pendiente Aprobación"
+        : estado;
       const requiereAprobacion = margenGeneral < 20 && !margenAprobado;
       const estadoFinal =
-        requiereAprobacion && estado !== "En espera" ? "Pendiente Aprobación" : estado;
+        requiereAprobacion && estadoSolicitado !== "En espera"
+          ? "Pendiente Aprobación"
+          : estadoSolicitado;
       const margenAprobadoFinal = margenGeneral < 20 ? margenAprobado : false;
       const fechaAdjudicadaFinal =
         estadoFinal === "Adjudicada"
@@ -2484,6 +2496,7 @@ export default function EditarLicitacion() {
         setToast({ type: "error", message: "Error al guardar licitación" });
         return false;
       }
+      setEstadoActualDB(estadoFinal);
 
       if (requiereAprobacion) {
         const detalleLineas = lineasBajoMargen.length
@@ -2789,7 +2802,7 @@ export default function EditarLicitacion() {
             </select>
           </div>
 
-          {/* ✅ Estado siempre editable */}
+          {/* ✅ Estado bloqueado en "Pendiente Aprobación" para no-admin */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Estado
@@ -2798,9 +2811,10 @@ export default function EditarLicitacion() {
             <select
               className={`w-full rounded-md border px-3 py-2 ${
                 estadoStyles[estado] || ""
-              }`}
+              } disabled:opacity-70 disabled:cursor-not-allowed`}
               value={estado}
               onChange={(e) => setEstado(e.target.value)}
+              disabled={!puedeEditarEstado}
             >
               <option value="En espera">En espera</option>
               <option value="Pendiente Aprobación">Pendiente Aprobación</option>

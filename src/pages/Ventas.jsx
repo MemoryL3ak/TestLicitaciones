@@ -128,13 +128,19 @@ export default function Ventas() {
   const rolNorm = (rol || "").toString().trim().toLowerCase();
   const esAdmin = rolNorm === "admin" || rolNorm === "administrador";
   const esVentas = rolNorm === "ventas";
-  const esJefatura = esAdmin || rolNorm === "jefe_ventas";
+  const esJefatura =
+    esAdmin ||
+    rolNorm === "jefe_ventas" ||
+    rolNorm === "jefe ventas" ||
+    rolNorm === "jefe-ventas" ||
+    rolNorm === "jefe de ventas";
+  const puedeVerVentas = esJefatura || esVentas;
 
   useEffect(() => {
     if (cargando) return;
-    if (!esAdmin) {
+    if (!puedeVerVentas) {
       setLoading(false);
-      setErrorMsg("Acceso restringido: esta seccion es solo para administradores.");
+      setErrorMsg("Acceso restringido: esta seccion es solo para administradores, jefatura o ventas.");
       setLicitaciones([]);
       setMontoOcByLicitacion({});
       setUsuariosMap({});
@@ -231,13 +237,13 @@ export default function Ventas() {
     return () => {
       mounted = false;
     };
-  }, [cargando, esAdmin, esVentas, user?.email]);
+  }, [cargando, puedeVerVentas, esVentas, user?.email]);
 
-  if (!cargando && !esAdmin) {
+  if (!cargando && !puedeVerVentas) {
     return (
       <div className="w-full max-w-4xl mx-auto">
         <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3">
-          Acceso restringido: esta seccion es solo para administradores.
+          Acceso restringido: esta seccion es solo para administradores, jefatura o ventas.
         </div>
       </div>
     );

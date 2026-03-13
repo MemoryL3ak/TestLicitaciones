@@ -24,10 +24,13 @@ export default function SidebarLayout() {
   const [perfil, setPerfil] = useState(null);
   const { requestNavigation } = useUnsavedChanges();
 
-  const isActive = (path) =>
-    location.pathname.startsWith(path)
+  const isActive = (path) => {
+    const active =
+      location.pathname === path || location.pathname.startsWith(`${path}/`);
+    return active
       ? "bg-blue-600 text-white border-blue-600"
       : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50";
+  };
 
   function onNavClick(e, to) {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -77,8 +80,16 @@ export default function SidebarLayout() {
     window.location.href = "/login";
   }
 
-  const esAdmin = perfil?.rol === "admin";
-  const puedeVerVentas = (perfil?.rol || "").toString().trim().toLowerCase() === "admin";
+  const rolNorm = (perfil?.rol || "").toString().trim().toLowerCase();
+  const esAdmin = rolNorm === "admin";
+  const esJefatura =
+    rolNorm === "jefe_ventas" ||
+    rolNorm === "jefe ventas" ||
+    rolNorm === "jefe-ventas" ||
+    rolNorm === "jefe de ventas";
+  const esVentas = rolNorm === "ventas";
+  const puedeVerVentas = esAdmin || esJefatura || esVentas;
+  const puedeVerMetas = esAdmin || esJefatura || esVentas;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -150,7 +161,7 @@ export default function SidebarLayout() {
               </Link>
             )}
 
-            {puedeVerVentas && (
+            {puedeVerMetas && (
               <Link
                 to="/metas"
                 onClick={(e) => onNavClick(e, "/metas")}
@@ -159,6 +170,18 @@ export default function SidebarLayout() {
                 )}`}
               >
                 Metas
+              </Link>
+            )}
+
+            {esAdmin && (
+              <Link
+                to="/metas-canal"
+                onClick={(e) => onNavClick(e, "/metas-canal")}
+                className={`px-4 py-2 rounded-full border text-sm font-medium transition cursor-pointer ${isActive(
+                  "/metas-canal"
+                )}`}
+              >
+                Metas por Canal
               </Link>
             )}
 

@@ -2,6 +2,48 @@
 import { supabase } from "../lib/supabase";
 import useAuth from "../hooks/useAuth";
 
+const CANAL_LABELS = {
+  vendedor_terreno: "Vendedor Terreno",
+  vendedor_tienda_terreno: "Vendedor Tienda/Terreno",
+  vendedor_terreno_mercado_publico: "Vendedor Terreno/Mercado Publico",
+  vendedor_terreno_mercado: "Vendedor Terreno/Mercado",
+  vendedor_mercado_publico: "Vendedor Mercado Publico",
+  pagina_web: "Pagina Web",
+  vendedor_tienda: "Vendedor Tienda",
+  vendedor_freelance: "Vendedor Freelance",
+};
+
+function normalizeCanal(value) {
+  const v = (value || "").toString().trim();
+  if (v === "vendedor_terreno_mercado") return "vendedor_terreno_mercado_publico";
+  return v;
+}
+
+function canalLabel(value) {
+  return CANAL_LABELS[normalizeCanal(value)] || "";
+}
+
+function canalSplitConfig(value) {
+  const canal = normalizeCanal(value);
+  if (canal === "vendedor_tienda_terreno") {
+    return {
+      firstKey: "vendedor_tienda",
+      secondKey: "vendedor_terreno",
+      firstLabel: "Meta Tienda",
+      secondLabel: "Meta Terreno",
+    };
+  }
+  if (canal === "vendedor_terreno_mercado_publico") {
+    return {
+      firstKey: "vendedor_terreno",
+      secondKey: "vendedor_mercado_publico",
+      firstLabel: "Meta Terreno",
+      secondLabel: "Meta Mercado",
+    };
+  }
+  return null;
+}
+
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -85,6 +127,18 @@ function isMissingMetasTableError(error) {
   return code === "42P01" || msg.includes("vendedor_metas_mensuales");
 }
 
+function isMissingAsignacionCanalTableError(error) {
+  const code = (error?.code || "").toString().toUpperCase();
+  const msg = [error?.message, error?.details, error?.hint].filter(Boolean).join(" ").toLowerCase();
+  return code === "42P01" || msg.includes("vendedor_metas_canal_mensuales");
+}
+
+function isMissingMetaDetalleTableError(error) {
+  const code = (error?.code || "").toString().toUpperCase();
+  const msg = [error?.message, error?.details, error?.hint].filter(Boolean).join(" ").toLowerCase();
+  return code === "42P01" || msg.includes("vendedor_metas_canal_partes_mensuales");
+}
+
 function MetaGaugeCard({ title, value, subtitle, pct }) {
   const progreso = clamp(pct, 0, 100);
   return (
@@ -109,7 +163,7 @@ function MetaGaugeCard({ title, value, subtitle, pct }) {
 }
 
 export default function Metas() {
-  const { rol, cargando } = useAuth();
+  const { user, rol, cargando } = useAuth();
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [metasErrorMsg, setMetasErrorMsg] = useState("");
@@ -120,17 +174,35 @@ export default function Metas() {
   const [usuariosMap, setUsuariosMap] = useState({});
   const [metasMap, setMetasMap] = useState({});
   const [metasDraftMap, setMetasDraftMap] = useState({});
+  const [metasSplitDraftMap, setMetasSplitDraftMap] = useState({});
+  const [metasDetalleMap, setMetasDetalleMap] = useState({});
+  const [canalPorVendedorMap, setCanalPorVendedorMap] = useState({});
   const [metaPeriodo, setMetaPeriodo] = useState(inicioMesISO());
   const [filtroVendedor, setFiltroVendedor] = useState("");
 
   const rolNorm = (rol || "").toString().trim().toLowerCase();
   const esAdmin = rolNorm === "admin" || rolNorm === "administrador";
+  const esJefatura =
+    rolNorm === "jefe_ventas" ||
+    rolNorm === "jefe ventas" ||
+    rolNorm === "jefe-ventas" ||
+    rolNorm === "jefe de ventas";
+  const esVentas = rolNorm === "ventas";
+  const puedeVerTodo = esAdmin || esJefatura;
+  const puedeVerMetas = esAdmin || esJefatura || esVentas;
+  const puedeEditarMetas = esAdmin;
+
+  useEffect(() => {
+    if (!esVentas) return;
+    const emailUser = (user?.email || "").trim().toLowerCase();
+    setFiltroVendedor(emailUser);
+  }, [esVentas, user?.email]);
 
   useEffect(() => {
     if (cargando) return;
-    if (!esAdmin) {
+    if (!puedeVerMetas) {
       setLoading(false);
-      setErrorMsg("Acceso restringido: esta sección es solo para administradores.");
+      setErrorMsg("Acceso restringido: esta seccion es solo para administradores, jefatura o ventas.");
       return;
     }
 
@@ -146,7 +218,11 @@ export default function Metas() {
           .order("id", { ascending: false });
         if (licsError) throw licsError;
 
-        const rows = lics || [];
+        let rows = lics || [];
+        const emailUser = (user?.email || "").trim().toLowerCase();
+        if (esVentas && emailUser) {
+          rows = rows.filter((l) => (l?.creado_por || "").trim().toLowerCase() === emailUser);
+        }
         const ids = rows.map((l) => Number(l?.id)).filter((n) => Number.isFinite(n));
 
         let docsOcRows = [];
@@ -215,30 +291,98 @@ export default function Metas() {
     return () => {
       mounted = false;
     };
-  }, [cargando, esAdmin]);
+  }, [cargando, puedeVerMetas, esVentas, user?.email]);
 
   useEffect(() => {
-    if (cargando || !esAdmin) return;
+    if (cargando || !puedeVerMetas) return;
     let mounted = true;
 
     async function cargarMetas() {
       setMetasErrorMsg("");
       setMetasInfoMsg("");
-      const { data, error } = await supabase
+      const qMetas = supabase
         .from("vendedor_metas_mensuales")
         .select("vendedor_email,meta_neto")
         .eq("periodo", metaPeriodo);
+      const qDetalle = supabase
+        .from("vendedor_metas_canal_partes_mensuales")
+        .select("vendedor_email,canal_base,meta_neto")
+        .eq("periodo", metaPeriodo);
+      const emailUser = (user?.email || "").trim().toLowerCase();
+      if (esVentas && emailUser) {
+        qMetas.eq("vendedor_email", emailUser);
+        qDetalle.eq("vendedor_email", emailUser);
+      }
+
+      const [metasRes, detalleRes] = await Promise.all([qMetas, qDetalle]);
 
       if (!mounted) return;
 
-      if (error) {
-        if (isMissingMetasTableError(error)) {
+      if (metasRes.error) {
+        if (isMissingMetasTableError(metasRes.error)) {
           setMetasErrorMsg("Falta la tabla vendedor_metas_mensuales. Ejecuta las migraciones.");
         } else {
           setMetasErrorMsg("No se pudieron cargar las metas del periodo.");
         }
         setMetasMap({});
         setMetasDraftMap({});
+        setMetasSplitDraftMap({});
+        setMetasDetalleMap({});
+        return;
+      }
+
+      const mapa = {};
+      (metasRes.data || []).forEach((row) => {
+        const email = (row?.vendedor_email || "").trim().toLowerCase();
+        if (!email) return;
+        mapa[email] = Number(row?.meta_neto || 0);
+      });
+
+      const detalleMapa = {};
+      if (!detalleRes.error) {
+        (detalleRes.data || []).forEach((row) => {
+          const email = (row?.vendedor_email || "").trim().toLowerCase();
+          const canalBase = normalizeCanal(row?.canal_base);
+          if (!email || !canalBase) return;
+          detalleMapa[email] = detalleMapa[email] || {};
+          detalleMapa[email][canalBase] = Math.max(0, Number(row?.meta_neto || 0));
+        });
+      } else if (!isMissingMetaDetalleTableError(detalleRes.error)) {
+        console.error("Error cargando detalle de metas por canal:", detalleRes.error);
+      }
+
+      setMetasMap(mapa);
+      setMetasDraftMap(mapa);
+      setMetasSplitDraftMap({});
+      setMetasDetalleMap(detalleMapa);
+    }
+
+    cargarMetas();
+    return () => {
+      mounted = false;
+    };
+  }, [cargando, puedeVerMetas, esVentas, user?.email, metaPeriodo]);
+
+  useEffect(() => {
+    if (cargando || !puedeVerMetas) return;
+    let mounted = true;
+
+    async function cargarAsignacionesCanal() {
+      const qAsig = supabase
+        .from("vendedor_metas_canal_mensuales")
+        .select("vendedor_email,canal")
+        .eq("periodo", metaPeriodo);
+      const emailUser = (user?.email || "").trim().toLowerCase();
+      if (esVentas && emailUser) qAsig.eq("vendedor_email", emailUser);
+      const { data, error } = await qAsig;
+
+      if (!mounted) return;
+
+      if (error) {
+        if (!isMissingAsignacionCanalTableError(error)) {
+          console.error("Error cargando asignaciones de canal:", error);
+        }
+        setCanalPorVendedorMap({});
         return;
       }
 
@@ -246,18 +390,16 @@ export default function Metas() {
       (data || []).forEach((row) => {
         const email = (row?.vendedor_email || "").trim().toLowerCase();
         if (!email) return;
-        mapa[email] = Number(row?.meta_neto || 0);
+        mapa[email] = normalizeCanal(row?.canal);
       });
-
-      setMetasMap(mapa);
-      setMetasDraftMap(mapa);
+      setCanalPorVendedorMap(mapa);
     }
 
-    cargarMetas();
+    cargarAsignacionesCanal();
     return () => {
       mounted = false;
     };
-  }, [cargando, esAdmin, metaPeriodo]);
+  }, [cargando, puedeVerMetas, esVentas, user?.email, metaPeriodo]);
 
   const opcionesVendedores = useMemo(() => {
     const correos = new Set([
@@ -265,12 +407,13 @@ export default function Metas() {
       ...licitaciones.map((l) => (l.creado_por || "").trim().toLowerCase()).filter(Boolean),
       ...Object.keys(metasMap),
       ...Object.keys(metasDraftMap),
+      ...Object.keys(canalPorVendedorMap),
     ]);
     return Array.from(correos)
       .filter(Boolean)
       .map((email) => ({ value: email, label: usuariosMap[email] || email }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [usuariosMap, licitaciones, metasMap, metasDraftMap]);
+  }, [usuariosMap, licitaciones, metasMap, metasDraftMap, canalPorVendedorMap]);
 
   const avanceMetas = useMemo(() => {
     const finPeriodo = finMesISO(metaPeriodo);
@@ -301,9 +444,12 @@ export default function Metas() {
       .map((v) => {
         const metaNeto = Math.max(0, Number(metasDraftMap[v.value] ?? metasMap[v.value] ?? 0));
         const avanceNeto = Number(consumidoPorVendedor[v.value] || 0);
+        const canal = normalizeCanal(canalPorVendedorMap[v.value] || "");
         return {
           email: v.value,
           nombre: v.label,
+          canal,
+          canalLabel: canalLabel(canal),
           metaNeto,
           avanceNeto,
           brechaNeto: Math.max(0, metaNeto - avanceNeto),
@@ -312,7 +458,7 @@ export default function Metas() {
         };
       })
       .sort((a, b) => b.pctCumplimiento - a.pctCumplimiento || b.avanceNeto - a.avanceNeto);
-  }, [metaPeriodo, licitaciones, ocs, opcionesVendedores, metasDraftMap, metasMap, filtroVendedor]);
+  }, [metaPeriodo, licitaciones, ocs, opcionesVendedores, metasDraftMap, metasMap, filtroVendedor, canalPorVendedorMap]);
 
   const resumenMetas = useMemo(() => {
     const metaNetaTotal = avanceMetas.reduce((acc, x) => acc + Number(x.metaNeto || 0), 0);
@@ -331,7 +477,7 @@ export default function Metas() {
   }, [avanceMetas]);
 
   async function guardarMetas() {
-    if (!esAdmin || guardandoMetas) return;
+    if (!puedeEditarMetas || guardandoMetas) return;
     setGuardandoMetas(true);
     setMetasErrorMsg("");
     setMetasInfoMsg("");
@@ -363,6 +509,68 @@ export default function Metas() {
         if (errUpsert) throw errUpsert;
       }
 
+      const emailsAll = entries.map(([email]) => email).filter(Boolean);
+      const detalleUpserts = [];
+
+      entries.forEach(([email, meta]) => {
+        const metaTotal = Math.max(0, Number(meta || 0));
+        if (!email || metaTotal <= 0) return;
+
+        const canalAsignado = normalizeCanal(canalPorVendedorMap[email] || "");
+        const splitCfg = canalSplitConfig(canalAsignado);
+        const splitDraft = metasSplitDraftMap[email];
+        const splitSaved = metasDetalleMap[email] || {};
+
+        if (splitCfg) {
+          const first = splitDraft
+            ? Math.max(0, Number(splitDraft[splitCfg.firstKey] ?? 0))
+            : Math.max(0, Number(splitSaved[splitCfg.firstKey] ?? Math.floor(metaTotal / 2)));
+          const second = splitDraft
+            ? Math.max(0, Number(splitDraft[splitCfg.secondKey] ?? 0))
+            : Math.max(0, Number(splitSaved[splitCfg.secondKey] ?? Math.max(0, metaTotal - first)));
+          const fixedSecond = Math.max(0, metaTotal - first);
+          detalleUpserts.push(
+            { vendedor_email: email, periodo: metaPeriodo, canal_base: splitCfg.firstKey, meta_neto: first },
+            { vendedor_email: email, periodo: metaPeriodo, canal_base: splitCfg.secondKey, meta_neto: splitDraft ? second : fixedSecond }
+          );
+          return;
+        }
+
+        const canalBase =
+          canalAsignado === "vendedor_terreno" ||
+          canalAsignado === "vendedor_mercado_publico" ||
+          canalAsignado === "vendedor_tienda" ||
+          canalAsignado === "pagina_web" ||
+          canalAsignado === "vendedor_freelance"
+            ? canalAsignado
+            : "";
+
+        if (canalBase) {
+          detalleUpserts.push({
+            vendedor_email: email,
+            periodo: metaPeriodo,
+            canal_base: canalBase,
+            meta_neto: metaTotal,
+          });
+        }
+      });
+
+      if (emailsAll.length > 0) {
+        const { error: errDeleteDetalle } = await supabase
+          .from("vendedor_metas_canal_partes_mensuales")
+          .delete()
+          .eq("periodo", metaPeriodo)
+          .in("vendedor_email", emailsAll);
+        if (errDeleteDetalle && !isMissingMetaDetalleTableError(errDeleteDetalle)) throw errDeleteDetalle;
+      }
+
+      if (detalleUpserts.length > 0) {
+        const { error: errUpsertDetalle } = await supabase
+          .from("vendedor_metas_canal_partes_mensuales")
+          .upsert(detalleUpserts, { onConflict: "vendedor_email,periodo,canal_base" });
+        if (errUpsertDetalle && !isMissingMetaDetalleTableError(errUpsertDetalle)) throw errUpsertDetalle;
+      }
+
       const nuevoMapa = {};
       upserts.forEach((row) => {
         const email = (row?.vendedor_email || "").trim().toLowerCase();
@@ -371,6 +579,15 @@ export default function Metas() {
 
       setMetasMap(nuevoMapa);
       setMetasDraftMap(nuevoMapa);
+      const nuevoDetalle = {};
+      detalleUpserts.forEach((row) => {
+        const email = (row?.vendedor_email || "").trim().toLowerCase();
+        const canal = normalizeCanal(row?.canal_base);
+        if (!email || !canal) return;
+        nuevoDetalle[email] = nuevoDetalle[email] || {};
+        nuevoDetalle[email][canal] = Number(row?.meta_neto || 0);
+      });
+      setMetasDetalleMap(nuevoDetalle);
       setMetasInfoMsg("Metas guardadas correctamente.");
     } catch (e) {
       console.error("Error guardando metas:", e);
@@ -380,11 +597,11 @@ export default function Metas() {
     }
   }
 
-  if (!cargando && !esAdmin) {
+  if (!cargando && !puedeVerMetas) {
     return (
       <div className="w-full max-w-4xl mx-auto">
         <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3">
-          Acceso restringido: esta sección es solo para administradores.
+          Acceso restringido: esta seccion es solo para administradores, jefatura o ventas.
         </div>
       </div>
     );
@@ -433,6 +650,7 @@ export default function Metas() {
                   <select
                     value={filtroVendedor}
                     onChange={(e) => setFiltroVendedor(e.target.value)}
+                    disabled={esVentas}
                     className="rounded-xl border border-slate-300 bg-white text-slate-900 px-3 py-2 text-sm shadow-sm"
                   >
                     <option value="">Todos</option>
@@ -444,14 +662,14 @@ export default function Metas() {
                 <button
                   type="button"
                   onClick={guardarMetas}
-                  disabled={guardandoMetas}
+                  disabled={guardandoMetas || !puedeEditarMetas}
                   className={`h-10 rounded-xl px-4 text-sm font-semibold text-white shadow-sm ${
-                    guardandoMetas
+                    guardandoMetas || !puedeEditarMetas
                       ? "bg-slate-400 cursor-not-allowed"
                       : "bg-gradient-to-r from-sky-600 to-cyan-500 hover:from-sky-700 hover:to-cyan-600 cursor-pointer"
                   }`}
                 >
-                  {guardandoMetas ? "Guardando..." : "Guardar metas"}
+                  {guardandoMetas ? "Guardando..." : puedeEditarMetas ? "Guardar metas" : "Solo lectura"}
                 </button>
               </div>
             </div>
@@ -519,24 +737,110 @@ export default function Metas() {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {avanceMetas.map((r) => {
                   const pct = Number(r.pctCumplimiento || 0);
+                  const splitCfg = canalSplitConfig(r.canal);
+                  const totalMetaDraft = Math.max(0, Number(metasDraftMap[r.email] ?? 0));
+                  const splitDraft = metasSplitDraftMap[r.email];
+                  const splitSaved = metasDetalleMap[r.email] || {};
+                  const splitFirst = splitDraft
+                    ? Math.max(0, Number(splitDraft[splitCfg?.firstKey] ?? 0))
+                    : Math.max(
+                        0,
+                        Number(
+                          splitSaved[splitCfg?.firstKey] ??
+                            (splitCfg ? Math.floor(totalMetaDraft / 2) : 0)
+                        )
+                      );
+                  const splitSecond = splitDraft
+                    ? Math.max(0, Number(splitDraft[splitCfg?.secondKey] ?? 0))
+                    : Math.max(
+                        0,
+                        Number(
+                          splitSaved[splitCfg?.secondKey] ??
+                            (splitCfg ? Math.max(0, totalMetaDraft - Math.floor(totalMetaDraft / 2)) : 0)
+                        )
+                      );
                   return (
                     <tr key={r.email} className="hover:bg-slate-50/70">
                       <td className="px-4 py-3">
                         <div className="text-sm font-semibold text-slate-900">{r.nombre}</div>
                         <div className="text-xs text-slate-500">{r.email}</div>
+                        <div className="mt-1 text-[11px] text-sky-700">
+                          Canal: {r.canalLabel || "Sin canal asignado"}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={Number(metasDraftMap[r.email] ?? 0)}
-                          onChange={(e) => {
-                            const v = Math.max(0, Number(e.target.value || 0));
-                            setMetasDraftMap((prev) => ({ ...prev, [r.email]: v }));
-                          }}
-                          className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm text-slate-900 shadow-sm"
-                        />
+                        {splitCfg ? (
+                          <div className="ml-auto w-56 space-y-2">
+                            <div>
+                              <div className="text-[10px] text-slate-500 mb-1">{splitCfg.firstLabel}</div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={splitFirst}
+                            disabled={!puedeEditarMetas}
+                            onChange={(e) => {
+                                  const nextFirst = Math.max(0, Number(e.target.value || 0));
+                                  const nextSecond = splitSecond;
+                                  setMetasSplitDraftMap((prev) => ({
+                                    ...prev,
+                                    [r.email]: {
+                                      [splitCfg.firstKey]: nextFirst,
+                                      [splitCfg.secondKey]: nextSecond,
+                                    },
+                                  }));
+                                  setMetasDraftMap((prev) => ({ ...prev, [r.email]: nextFirst + nextSecond }));
+                                }}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm text-slate-900 shadow-sm"
+                              />
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-slate-500 mb-1">{splitCfg.secondLabel}</div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={splitSecond}
+                            disabled={!puedeEditarMetas}
+                            onChange={(e) => {
+                                  const nextSecond = Math.max(0, Number(e.target.value || 0));
+                                  const nextFirst = splitFirst;
+                                  setMetasSplitDraftMap((prev) => ({
+                                    ...prev,
+                                    [r.email]: {
+                                      [splitCfg.firstKey]: nextFirst,
+                                      [splitCfg.secondKey]: nextSecond,
+                                    },
+                                  }));
+                                  setMetasDraftMap((prev) => ({ ...prev, [r.email]: nextFirst + nextSecond }));
+                                }}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm text-slate-900 shadow-sm"
+                              />
+                            </div>
+                            <div className="text-[11px] text-slate-500 text-right">
+                              Total: {fmtCLP(splitFirst + splitSecond)}
+                            </div>
+                          </div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={Number(metasDraftMap[r.email] ?? 0)}
+                            disabled={!puedeEditarMetas}
+                            onChange={(e) => {
+                              const v = Math.max(0, Number(e.target.value || 0));
+                              setMetasSplitDraftMap((prev) => {
+                                if (!prev[r.email]) return prev;
+                                const next = { ...prev };
+                                delete next[r.email];
+                                return next;
+                              });
+                              setMetasDraftMap((prev) => ({ ...prev, [r.email]: v }));
+                            }}
+                            className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm text-slate-900 shadow-sm"
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-semibold text-emerald-700">{fmtCLP(r.avanceNeto)}</td>
                       <td className="px-4 py-3 text-sm text-right font-semibold text-sky-700">{fmtCLP(r.avanceBruto)}</td>
@@ -564,6 +868,21 @@ export default function Metas() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex justify-end border-t border-slate-200/80 bg-slate-50/70 px-6 py-4">
+            <button
+              type="button"
+              onClick={guardarMetas}
+              disabled={guardandoMetas || !puedeEditarMetas}
+              className={`h-10 rounded-xl px-4 text-sm font-semibold text-white shadow-sm ${
+                guardandoMetas || !puedeEditarMetas
+                  ? "bg-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-sky-600 to-cyan-500 hover:from-sky-700 hover:to-cyan-600 cursor-pointer"
+              }`}
+            >
+              {guardandoMetas ? "Guardando..." : puedeEditarMetas ? "Guardar metas" : "Solo lectura"}
+            </button>
           </div>
         </section>
       )}

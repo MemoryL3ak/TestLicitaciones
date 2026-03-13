@@ -30,7 +30,7 @@ export default function Productos() {
   const [filtroProducto, setFiltroProducto] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [filtroMarcas, setFiltroMarcas] = useState([]);
-  const [ordenPrecio, setOrdenPrecio] = useState(null);
+  const [ordenTabla, setOrdenTabla] = useState({ key: null, dir: "asc" });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState(null);
@@ -200,11 +200,36 @@ export default function Productos() {
       return matchSKU && matchProducto && matchCategoria && matchMarca;
     })
     .sort((a, b) => {
-      if (!ordenPrecio) return 0;
-      const pa = Number(a.lista1 ?? 0);
-      const pb = Number(b.lista1 ?? 0);
-      return ordenPrecio === "asc" ? pa - pb : pb - pa;
+      if (!ordenTabla.key) return 0;
+
+      const key = ordenTabla.key;
+      const dir = ordenTabla.dir === "asc" ? 1 : -1;
+
+      const getValue = (p) => {
+        if (key === "precio") return Number(p.lista1 ?? 0);
+        return String(p?.[key] ?? "").toLowerCase();
+      };
+
+      const va = getValue(a);
+      const vb = getValue(b);
+
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return va.localeCompare(vb, "es", { sensitivity: "base" }) * dir;
     });
+
+  function toggleSort(key) {
+    setOrdenTabla((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      return { key, dir: "asc" };
+    });
+  }
+
+  function sortIndicator(key) {
+    if (ordenTabla.key !== key) return "";
+    return ordenTabla.dir === "asc" ? " ^" : " v";
+  }
 
   /* ============================================================
      LIMPIAR MARCAS NO VÁLIDAS CUANDO CAMBIA EL FILTRO PRODUCTO
@@ -315,34 +340,28 @@ export default function Productos() {
       {/* TABLA */}
       <div className="bg-white shadow border border-gray-300/30 rounded-xl overflow-y-auto max-h-[900px]">
         <table className="min-w-full divide-y divide-gray-300">
-          <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                SKU
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("sku")}>
+                SKU{sortIndicator("sku")}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("nombre")}>
+                Producto{sortIndicator("nombre")}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("marca")}>
+                Marca{sortIndicator("marca")}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("categoria")}>
+                Categoria{sortIndicator("categoria")}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("formato")}>
+                Formato{sortIndicator("formato")}
+              </th>
+              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none" onClick={() => toggleSort("precio")}>
+                Precio Unitario{sortIndicator("precio")}
               </th>
               <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                Producto
-              </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                Marca
-              </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                Categoría
-              </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                Formato
-              </th>
-              <th
-                className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600 cursor-pointer select-none"
-                onClick={() =>
-                  setOrdenPrecio((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-              >
-                Precio Unitario {ordenPrecio === "asc" && "▲"}
-                {ordenPrecio === "desc" && "▼"}
-              </th>
-              <th className="px-6 py-2 text-left text-[11px] font-semibold text-gray-600">
-                Acción
+                Accion
               </th>
             </tr>
           </thead>
@@ -452,6 +471,8 @@ export default function Productos() {
     </div>
   );
 }
+
+
 
 
 

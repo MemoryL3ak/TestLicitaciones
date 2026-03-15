@@ -99,6 +99,37 @@ function parseMontoCL(str) {
   return Number(digits || 0);
 }
 
+function parseMontoFlexible(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") return parseMontoCL(value);
+  return 0;
+}
+
+function isTipoOrdenCompra(value) {
+  const v = (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  return (
+    v === "orden compra" ||
+    v === "orden de compra" ||
+    v.includes("orden compra") ||
+    v.includes("orden de compra")
+  );
+}
+
+function formatPorcentajePresupuesto(pct) {
+  const n = Number(pct || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0%";
+  if (n < 100) {
+    const truncado = Math.floor(n * 100) / 100;
+    return `${truncado.toFixed(2)}%`;
+  }
+  return `${n.toFixed(2)}%`;
+}
+
 function calcularBrutoDesdeNeto(neto) {
   return redondear(Number(neto || 0) * 1.19);
 }
@@ -1532,11 +1563,12 @@ export default function EditarLicitacion() {
      DETECCIÓN DE CAMBIOS
 ============================================================ */
   function buildSnapshot() {
+    const montoPresupuestoNeto = parseMontoCL(monto);
     return JSON.stringify({
       idLicitacionInput: idLicitacionInput || "",
       nombre: nombre || "",
       fechaHoraCierre: fechaHoraCierre || "",
-      monto: Number(monto || 0),
+      monto: montoPresupuestoNeto,
       listado: String(listado || "1"),
       estado: estado || "En espera",
       margenAprobado: Boolean(margenAprobado),
@@ -2046,17 +2078,19 @@ export default function EditarLicitacion() {
   const montoConsumidoOCNeto = useMemo(
     () =>
       (documentos || [])
-        .filter((d) => d?.tipo === "orden_compra")
-        .reduce((acc, d) => acc + Number(d?.monto || 0), 0),
+        .filter((d) => isTipoOrdenCompra(d?.tipo))
+        .reduce((acc, d) => acc + parseMontoFlexible(d?.monto), 0),
     [documentos]
   );
   const montoConsumidoOC = calcularBrutoDesdeNeto(montoConsumidoOCNeto);
-  const saldoPorConsumirResumen = totalConIVA - montoConsumidoOC;
+  const montoPresupuesto = parseMontoCL(monto);
+  const saldoPresupuesto = montoPresupuesto - totalConIVA;
+  const saldoPorConsumirResumen = Math.max(0, montoPresupuesto - montoConsumidoOC);
   const montoNetoOCFormulario = parseMontoCL(docMonto);
   const montoBrutoOCFormulario = calcularBrutoDesdeNeto(montoNetoOCFormulario);
 
   let porcentajePresupuesto = 0;
-  if (Number(monto) > 0) porcentajePresupuesto = (totalConIVA / Number(monto)) * 100;
+  if (montoPresupuesto > 0) porcentajePresupuesto = (totalConIVA / montoPresupuesto) * 100;
 
   let colorPresupuesto = "text-gray-700 bg-gray-100 border-gray-300";
   if (porcentajePresupuesto <= 80)
@@ -2462,7 +2496,7 @@ export default function EditarLicitacion() {
           id_licitacion: idLicitacionInput,
           nombre,
           fecha_hora_cierre: fechaHoraCierre,
-          monto: Number(monto),
+          monto: parseMontoCL(monto),
           lista_precios: Number(listado),
 
           rut_entidad: rutEntidad,
@@ -2759,10 +2793,11 @@ export default function EditarLicitacion() {
               Monto Presupuesto *
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               className={inputClass}
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
+              value={monto ? `$${formatearCLDesdeString(String(monto))}` : ""}
+              onChange={(e) => setMonto(soloDigitos(e.target.value))}
               disabled={!esEditable}
             />
           </div>
@@ -3331,9 +3366,9 @@ export default function EditarLicitacion() {
           </div>
         </div>
 
-        <div>
+        <div className="mb-6">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">Financiero</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Margen General
@@ -3372,17 +3407,32 @@ export default function EditarLicitacion() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Saldo Presupuesto
+              </label>
+              <div className="w-full h-10 rounded-md border border-gray-300 px-3 flex items-center font-semibold bg-gray-50">
+                {saldoPresupuesto >= 0 ? "$" : "-$"}
+                {Math.abs(saldoPresupuesto).toLocaleString("es-CL")}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 % Presupuesto
               </label>
               <div
                 className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
               >
                 {porcentajePresupuesto > 0
-                  ? porcentajePresupuesto.toFixed(2) + "%"
+                  ? formatPorcentajePresupuesto(porcentajePresupuesto)
                   : "0%"}
               </div>
             </div>
+          </div>
+        </div>
 
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Órdenes de Compra</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Valor consumido

@@ -80,6 +80,16 @@ function parseMontoCL(str) {
   return Number(digits || 0);
 }
 
+function formatPorcentajePresupuesto(pct) {
+  const n = Number(pct || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0%";
+  if (n < 100) {
+    const truncado = Math.floor(n * 100) / 100;
+    return `${truncado.toFixed(2)}%`;
+  }
+  return `${n.toFixed(2)}%`;
+}
+
 function normalizarVolumenCm3(valor) {
   const n = Number(valor || 0);
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -2386,7 +2396,7 @@ export default function CrearLicitacion() {
                 className={`w-full h-10 rounded-md border px-3 flex items-center font-semibold ${colorPresupuesto}`}
               >
                 {porcentajePresupuesto > 0
-                  ? porcentajePresupuesto.toFixed(2) + "%"
+                  ? formatPorcentajePresupuesto(porcentajePresupuesto)
                   : "0%"}
               </div>
             </div>

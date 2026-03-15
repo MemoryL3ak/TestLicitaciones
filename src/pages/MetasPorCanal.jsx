@@ -30,6 +30,26 @@ function monthStartISO() {
   return d.toISOString().slice(0, 10);
 }
 
+function supportsMonthInput() {
+  if (typeof document === "undefined") return true;
+  const input = document.createElement("input");
+  input.setAttribute("type", "month");
+  input.value = "2026-03";
+  return input.type === "month" && input.value === "2026-03";
+}
+
+function monthValueFromPeriodo(periodo) {
+  const s = String(periodo || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.slice(0, 7);
+  return "";
+}
+
+function periodoFromMonthValue(value) {
+  const v = String(value || "");
+  if (!/^\d{4}-\d{2}$/.test(v)) return "";
+  return `${v}-01`;
+}
+
 function monthEndISO(start) {
   const base = start ? new Date(`${start}T00:00:00`) : new Date();
   if (Number.isNaN(base.getTime())) return todayISO();
@@ -128,6 +148,7 @@ export default function MetasPorCanal() {
   const [metasInfoMsg, setMetasInfoMsg] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [metaPeriodo, setMetaPeriodo] = useState(monthStartISO());
+  const [monthPickerAvailable, setMonthPickerAvailable] = useState(true);
   const [filtroVendedor, setFiltroVendedor] = useState("");
 
   const [licitaciones, setLicitaciones] = useState([]);
@@ -140,6 +161,34 @@ export default function MetasPorCanal() {
 
   const rolNorm = (rol || "").toString().trim().toLowerCase();
   const esAdmin = rolNorm === "admin" || rolNorm === "administrador";
+  const monthValue = monthValueFromPeriodo(metaPeriodo);
+
+  const monthSelectYears = useMemo(() => {
+    const nowYear = new Date().getFullYear();
+    return Array.from({ length: 11 }, (_, i) => nowYear - 5 + i);
+  }, []);
+
+  const monthSelectOptions = useMemo(
+    () => [
+      { value: "01", label: "Enero" },
+      { value: "02", label: "Febrero" },
+      { value: "03", label: "Marzo" },
+      { value: "04", label: "Abril" },
+      { value: "05", label: "Mayo" },
+      { value: "06", label: "Junio" },
+      { value: "07", label: "Julio" },
+      { value: "08", label: "Agosto" },
+      { value: "09", label: "Septiembre" },
+      { value: "10", label: "Octubre" },
+      { value: "11", label: "Noviembre" },
+      { value: "12", label: "Diciembre" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    setMonthPickerAvailable(supportsMonthInput());
+  }, []);
 
   useEffect(() => {
     if (cargando) return;
@@ -577,12 +626,42 @@ export default function MetasPorCanal() {
                 <div className="flex items-end gap-3 flex-wrap">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Mes de evaluacion</label>
-                    <input
-                      type="month"
-                      value={metaPeriodo.slice(0, 7)}
-                      onChange={(e) => setMetaPeriodo(`${e.target.value}-01`)}
-                      className="rounded-xl border border-slate-300 bg-white text-slate-900 px-3 py-2 text-sm shadow-sm"
-                    />
+                    {monthPickerAvailable ? (
+                      <input
+                        type="month"
+                        value={monthValue}
+                        onChange={(e) => {
+                          const next = periodoFromMonthValue(e.target.value);
+                          if (next) setMetaPeriodo(next);
+                        }}
+                        className="rounded-xl border border-slate-300 bg-white text-slate-900 px-3 py-2 text-sm shadow-sm"
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <select
+                          value={monthValue.slice(5, 7)}
+                          onChange={(e) => setMetaPeriodo(`${monthValue.slice(0, 4)}-${e.target.value}-01`)}
+                          className="rounded-xl border border-slate-300 bg-white text-slate-900 px-3 py-2 text-sm shadow-sm"
+                        >
+                          {monthSelectOptions.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={monthValue.slice(0, 4)}
+                          onChange={(e) => setMetaPeriodo(`${e.target.value}-${monthValue.slice(5, 7)}-01`)}
+                          className="rounded-xl border border-slate-300 bg-white text-slate-900 px-3 py-2 text-sm shadow-sm"
+                        >
+                          {monthSelectYears.map((y) => (
+                            <option key={String(y)} value={String(y)}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Vendedor</label>

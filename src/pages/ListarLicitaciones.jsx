@@ -3,10 +3,12 @@ import { supabase } from "../lib/supabase";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
 import useAuth from "../hooks/useAuth";
+import Toast from "../components/Toast";
 
 export default function ListarLicitaciones() {
   const { user, rol, cargando } = useAuth();
   const [data, setData] = useState([]);
+  const [toast, setToast] = useState(null);
 
   // Mapa: email -> nombre (UI solo muestra nombre)
   const [usuariosMap, setUsuariosMap] = useState({});
@@ -246,10 +248,52 @@ export default function ListarLicitaciones() {
   };
 
   // ----------------------------------------------------------------
+  // ACCIONES ADMIN
+  // ----------------------------------------------------------------
+  async function aprobarCotizacion(id) {
+    const { error } = await supabase
+      .from("licitaciones")
+      .update({ estado: "En espera", margen_aprobado: true })
+      .eq("id", id);
+
+    if (error) {
+      setToast({ type: "error", message: "No se pudo aprobar la cotización." });
+      return;
+    }
+
+    setData((prev) =>
+      prev.map((l) =>
+        l.id === id ? { ...l, estado: "En espera", margen_aprobado: true } : l
+      )
+    );
+    setToast({ type: "success", message: "Cotización aprobada." });
+  }
+
+  async function eliminarCotizacion(id) {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta cotización? Esta acción no se puede deshacer.")) return;
+
+    const { error } = await supabase
+      .from("licitaciones")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      setToast({ type: "error", message: "No se pudo eliminar la cotización." });
+      return;
+    }
+
+    setData((prev) => prev.filter((l) => l.id !== id));
+    setToast({ type: "success", message: "Cotización eliminada." });
+  }
+
+  // ----------------------------------------------------------------
   // RENDER
   // ----------------------------------------------------------------
   return (
     <div className="w-full max-w-[92rem] mx-auto p-8">
+      {toast && (
+        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+      )}
       <h1 className="text-3xl font-semibold text-gray-900 mb-8">
         Cotizaciones
       </h1>
@@ -481,28 +525,28 @@ export default function ListarLicitaciones() {
       ------------------------------------------------------------ */}
       <div className="bg-white border border-gray-500/10 shadow-sm rounded-xl overflow-hidden">
         <div className="max-h-[calc(100vh-420px)] overflow-y-auto overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-300">
+          <table className="w-full divide-y divide-gray-300 table-fixed">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[100px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   N° Cotización
                 </th>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[200px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   ID Cotización
                 </th>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[110px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Fecha
                 </th>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[140px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Comuna
                 </th>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[170px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Estado
                 </th>
-                <th className="px-6 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="w-[140px] px-3 py-2 text-left text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Creado por
                 </th>
-                <th className="px-6 py-2 text-right text-[13px] font-semibold text-gray-600 whitespace-nowrap">
+                <th className="px-3 py-2 text-right text-[13px] font-semibold text-gray-600 whitespace-nowrap">
                   Acción
                 </th>
               </tr>
@@ -513,7 +557,7 @@ export default function ListarLicitaciones() {
                 <tr>
                   <td
                     colSpan="7"
-                    className="px-6 py-16 text-center text-gray-500"
+                    className="px-3 py-16 text-center text-gray-500"
                   >
                     No hay licitaciones que coincidan con los filtros.
                   </td>
@@ -526,37 +570,57 @@ export default function ListarLicitaciones() {
 
                 return (
                   <tr key={l.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 text-sm whitespace-nowrap">{l.id}</td>
+                    <td className="px-3 py-3 text-sm whitespace-nowrap">{l.id}</td>
 
-                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    <td className="px-3 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
                       {l.id_licitacion || ""}
                     </td>
 
-                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    <td className="px-3 py-3 text-sm whitespace-nowrap">
                       {l.fecha
                         ? l.fecha.slice(0, 10).split("-").reverse().join("-")
                         : ""}
                     </td>
 
-                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    <td className="px-3 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
                       {l.comuna || ""}
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <span className={badgeEstado(l.estado)}>{l.estado}</span>
                     </td>
 
-                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    <td className="px-3 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
                       {nombre || "Sin nombre"}
                     </td>
 
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <Link
-                        to={`/detalle/${l.id}`}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Ver detalle →
-                      </Link>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        {rol === "admin" && l.estado === "Pendiente Aprobación" && (
+                          <button
+                            type="button"
+                            onClick={() => aprobarCotizacion(l.id)}
+                            className="px-3 py-1 text-xs font-semibold bg-green-600 text-white rounded-md hover:bg-green-700 transition cursor-pointer"
+                          >
+                            Aprobar
+                          </button>
+                        )}
+                        {rol === "admin" && (
+                          <button
+                            type="button"
+                            onClick={() => eliminarCotizacion(l.id)}
+                            className="px-3 py-1 text-xs font-semibold bg-red-600 text-white rounded-md hover:bg-red-700 transition cursor-pointer"
+                          >
+                            Eliminar
+                          </button>
+                        )}
+                        <Link
+                          to={`/detalle/${l.id}`}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          Ver detalle →
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );

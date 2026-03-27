@@ -820,6 +820,7 @@ export default function EditarLicitacion() {
   const [fechaAdjudicada, setFechaAdjudicada] = useState(null);
   const [margenAprobado, setMargenAprobado] = useState(false);
   const [tipoCompra, setTipoCompra] = useState("Compra ágil");
+  const [montoAdicionalOC, setMontoAdicionalOC] = useState("");
 
   const [observaciones, setObservaciones] = useState("");
 
@@ -1448,6 +1449,7 @@ export default function EditarLicitacion() {
       setEstado(data.estado || "En espera");
       setTipoCompra(data.tipoCompra || "Compra ágil");
       setMargenAprobado(Boolean(data.margenAprobado || data.margen_aprobado));
+      setMontoAdicionalOC(data.montoAdicionalOC || "");
 
       setRutEntidad(data.rutEntidad || "");
       setNombreEntidad(data.nombreEntidad || "");
@@ -1526,6 +1528,7 @@ export default function EditarLicitacion() {
       vendedorNombre,
       vendedorCelular,
       vendedorCorreo,
+      montoAdicionalOC,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -1557,6 +1560,7 @@ export default function EditarLicitacion() {
     vendedorNombre,
     vendedorCelular,
     vendedorCorreo,
+    montoAdicionalOC,
   ]);
 
   /* ============================================================
@@ -1569,6 +1573,7 @@ export default function EditarLicitacion() {
       nombre: nombre || "",
       fechaHoraCierre: fechaHoraCierre || "",
       monto: montoPresupuestoNeto,
+      montoAdicionalOC: parseMontoCL(montoAdicionalOC),
       listado: String(listado || "1"),
       estado: estado || "En espera",
       margenAprobado: Boolean(margenAprobado),
@@ -1641,6 +1646,7 @@ export default function EditarLicitacion() {
     nombre,
     fechaHoraCierre,
     monto,
+    montoAdicionalOC,
     listado,
     estado,
     tipoCompra,
@@ -1691,6 +1697,7 @@ export default function EditarLicitacion() {
     setNombre(lic.nombre || "");
     setFechaHoraCierre(lic.fecha_hora_cierre || "");
     setMonto(lic.monto || "");
+    setMontoAdicionalOC(String(lic.monto_adicional_oc || ""));
     setListado(String(lic.lista_precios || "1"));
     setEstado(lic.estado || "En espera");
     setEstadoActualDB(lic.estado || "En espera");
@@ -1892,6 +1899,7 @@ export default function EditarLicitacion() {
       setNombre(lic.nombre || "");
       setFechaHoraCierre(lic.fecha_hora_cierre || "");
       setMonto(lic.monto || "");
+      setMontoAdicionalOC(String(lic.monto_adicional_oc || ""));
       setListado(String(lic.lista_precios || "1"));
       setEstado(lic.estado || "En espera");
       setEstadoActualDB(lic.estado || "En espera");
@@ -2082,7 +2090,7 @@ export default function EditarLicitacion() {
         .reduce((acc, d) => acc + parseMontoFlexible(d?.monto), 0),
     [documentos]
   );
-  const montoConsumidoOC = calcularBrutoDesdeNeto(montoConsumidoOCNeto);
+  const montoConsumidoOC = calcularBrutoDesdeNeto(montoConsumidoOCNeto) + parseMontoCL(montoAdicionalOC);
   const montoPresupuesto = parseMontoCL(monto);
   const saldoPresupuesto = montoPresupuesto - totalConIVA;
   const saldoPorConsumirResumen = Math.max(0, montoPresupuesto - montoConsumidoOC);
@@ -2497,6 +2505,7 @@ export default function EditarLicitacion() {
           nombre,
           fecha_hora_cierre: fechaHoraCierre,
           monto: parseMontoCL(monto),
+          monto_adicional_oc: parseMontoCL(montoAdicionalOC),
           lista_precios: Number(listado),
 
           rut_entidad: rutEntidad,
@@ -3432,7 +3441,22 @@ export default function EditarLicitacion() {
 
         <div>
           <h3 className="text-sm font-semibold text-gray-800 mb-3">Órdenes de Compra</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Monto adicional
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={inputClassH10}
+                value={montoAdicionalOC ? formatearCLDesdeString(montoAdicionalOC) : ""}
+                onChange={(e) => setMontoAdicionalOC(soloDigitos(e.target.value))}
+                placeholder="0"
+                disabled={!esEditable}
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Valor consumido

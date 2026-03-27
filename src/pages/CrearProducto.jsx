@@ -159,6 +159,7 @@ export default function CrearProducto() {
 
   const [rol, setRol] = useState(null);
   const [rolLoading, setRolLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState("");
 
   /* ==========================================================
      Cargar rol del usuario
@@ -175,6 +176,8 @@ export default function CrearProducto() {
           if (alive) setRol(null);
           return;
         }
+
+        if (alive) setUserEmail(usuario.user.email || "");
 
         const { data: perfil, error: ePerfil } = await supabase
           .from("profiles")
@@ -304,6 +307,8 @@ export default function CrearProducto() {
     if (!(composicion ?? "").toString().trim()) missing.push("Composición");
     if (!(usoIndicaciones ?? "").toString().trim()) missing.push("Uso/Indicaciones");
     if (!(beneficios ?? "").toString().trim()) missing.push("Beneficios");
+    if (puedeVerCosto && !(Number(costo) > 0)) missing.push("Costo");
+    if (!(Number(precios.lista1) > 0)) missing.push("Precio de Venta (Lista 1)");
 
     if (missing.length) {
       setToast({
@@ -353,6 +358,7 @@ export default function CrearProducto() {
       lista2: Number(precios.lista2) || 0,
       lista3: 0,
       lista4: 0,
+      creado_por: userEmail || null,
     };
 
     if (puedeVerCosto) {
@@ -774,7 +780,7 @@ export default function CrearProducto() {
               {puedeVerCosto && (
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Costo
+                    Costo *
                   </label>
                   <input
                     type="number"
@@ -790,8 +796,8 @@ export default function CrearProducto() {
                   <label className="block text-sm text-gray-600 mb-1">
                     {list === "lista1"
                       ? esVentasOJefe
-                        ? "Precio Venta Neto"
-                        : "Listado de Precios 1"
+                        ? "Precio Venta Neto *"
+                        : "Listado de Precios 1 *"
                       : "Listado de Precios 2"}
                   </label>
                   <input
